@@ -41,7 +41,9 @@ For findings affected by dynamic imports, filesystem discovery, runtime registra
 
 Worked end-to-end scenarios show how these independent rules combine for internal exports, dynamic plugins, public APIs, monorepo dependencies, and higher-risk file deletion. The scenarios illustrate the existing policy rather than defining new cleanup rules.
 
-See [SKILL.md](SKILL.md) for the workflow, [references/risk-classification.md](references/risk-classification.md) for cleanup risk, [references/confidence-evidence.md](references/confidence-evidence.md) for the evidence model, [references/dynamic-runtime-usage.md](references/dynamic-runtime-usage.md) for runtime discovery and convention-based usage, [references/execution-policy.md](references/execution-policy.md) for action gates and batching, [references/git-aware-review.md](references/git-aware-review.md) for PR-scoped review, [references/monorepo-cleanup.md](references/monorepo-cleanup.md) for workspace-specific guidance, [references/verification.md](references/verification.md) for validation and recovery, and [references/end-to-end-scenarios.md](references/end-to-end-scenarios.md) for worked examples of the complete decision and execution loop.
+Analysis-only mode treats the repository as read-only. It does not install or temporarily fetch Knip, edit configuration, run auto-fixes, or perform otherwise eligible cleanup. When Git is available, the final repository state must match the initial state.
+
+See [SKILL.md](SKILL.md) for the workflow, [references/risk-classification.md](references/risk-classification.md) for cleanup risk, [references/confidence-evidence.md](references/confidence-evidence.md) for the evidence model, [references/dynamic-runtime-usage.md](references/dynamic-runtime-usage.md) for runtime discovery and convention-based usage, [references/execution-policy.md](references/execution-policy.md) for action gates and batching, [references/analysis-only-mode.md](references/analysis-only-mode.md) for read-only analysis safeguards, [references/git-aware-review.md](references/git-aware-review.md) for PR-scoped review, [references/monorepo-cleanup.md](references/monorepo-cleanup.md) for workspace-specific guidance, [references/verification.md](references/verification.md) for validation and recovery, and [references/end-to-end-scenarios.md](references/end-to-end-scenarios.md) for worked examples of the complete decision and execution loop.
 
 ## Principles
 
@@ -58,6 +60,7 @@ See [SKILL.md](SKILL.md) for the workflow, [references/risk-classification.md](r
 - Make small semantic batches and inspect the resulting diff before continuing.
 - Stop on unexplained validation failures.
 - Preserve unrelated user work; cleanup recovery must not use destructive repository-wide resets.
+- In analysis-only mode, do not modify repository or dependency state and verify the final worktree matches the initial worktree when Git is available.
 - Use the repository's existing validation commands.
 - Rerun Knip after cleanup because removing dead code can expose more dead code.
 - In PR review, use Git context to prioritize findings without hiding unrelated analysis results.
@@ -72,17 +75,19 @@ Use an existing local Knip installation when available, for example:
 pnpm exec knip
 ```
 
+Only use a package-manager runner after confirming that Knip is already available locally. Do not use `npx`, `npm exec`, `bunx`, or a similar runner to download or temporarily install Knip for analysis-only work.
+
 The skill can also work with Knip's official MCP server when the agent environment exposes `knip-run`.
 
 For monorepos, Knip's `--workspace` filter may be used to focus a first pass on affected workspaces when appropriate. Broader validation and a full Knip run may still be needed before finalizing cross-workspace changes.
 
-When auto-fix is appropriate, prefer scoped issue types such as `knip --fix-type dependencies` or `knip --fix-type exports,types`. The skill does not treat unrestricted `knip --fix` as the default execution path.
+When auto-fix is appropriate, prefer scoped issue types such as `knip --fix-type dependencies` or `knip --fix-type exports,types`. The skill does not treat unrestricted `knip --fix` as the default execution path. Auto-fix is never part of analysis-only mode.
 
 This repository does not wrap or replace Knip and does not require its own runtime dependency.
 
 ## Project status
 
-The skill currently covers repository cleanup, Git-aware PR/branch review, monorepo/workspace-aware cleanup, dynamic runtime usage investigation, evidence-based confidence reporting, a conservative cleanup execution policy, and worked end-to-end scenarios for applying the full decision loop. Automation can be added separately without turning the project into a CLI or another MCP server.
+The skill currently covers repository cleanup, analysis-only safety, Git-aware PR/branch review, monorepo/workspace-aware cleanup, dynamic runtime usage investigation, evidence-based confidence reporting, a conservative cleanup execution policy, and worked end-to-end scenarios for applying the full decision loop. Automation can be added separately without turning the project into a CLI or another MCP server.
 
 ## License
 

@@ -30,6 +30,8 @@ When a finding may be affected by dynamic imports, filesystem discovery, runtime
 
 For worked examples that apply the full classification, evidence, execution, validation, and rerun loop, see [references/end-to-end-scenarios.md](references/end-to-end-scenarios.md). The scenarios illustrate the normative references; they do not override them.
 
+If the user requests analysis, inspection, classification, or reporting **without modifications**, follow [references/analysis-only-mode.md](references/analysis-only-mode.md). Treat the repository as read-only, use only an existing Knip installation or approved external interface, stop before any cleanup action, and verify that final repository state matches the initial state when Git is available.
+
 Do not broaden a PR-scoped cleanup into unrelated repository-wide debt unless the task explicitly requests it.
 
 ## Workflow
@@ -51,11 +53,15 @@ For a monorepo, identify the manifest and public API boundary of each affected w
 
 Do not add Knip to the project unless the task explicitly allows dependency changes. Prefer an existing local Knip installation. If Knip is unavailable, explain what is missing instead of silently changing the project.
 
+In analysis-only mode, do not install, add, or temporarily fetch Knip. Do not use `npm install`, `pnpm add`, `yarn add`, `bun add`, or a package runner that would download Knip. If no existing installation or approved Knip interface is available, report that limitation and continue only with evidence that can be collected read-only.
+
 Do not discard, reset, stash, or overwrite unrelated user changes merely to prepare a cleanup.
 
 ### 2. Run Knip without fixing
 
-Run Knip in report-only mode first. Prefer the project's package manager, for example:
+Run Knip in report-only mode first, but only after establishing that the command will use an existing installation.
+
+When a local installation has been confirmed, use the project's package manager as appropriate, for example:
 
 ```sh
 pnpm exec knip
@@ -64,11 +70,13 @@ yarn knip
 bunx knip
 ```
 
+Do not use `npx`, `npm exec`, `bunx`, or another package runner to obtain Knip from a registry when it is not already available locally. This is especially strict in analysis-only mode.
+
 If the official Knip MCP server is available, `knip-run` may be used instead.
 
 For a targeted monorepo task, a Knip workspace filter may be useful for the first pass, but do not treat a filtered run as proof that cross-workspace consumers do not exist.
 
-Never start with `--fix` or `--allow-remove-files` before reviewing the findings.
+Never start with `--fix` or `--allow-remove-files` before reviewing the findings. In analysis-only mode, do not run any Knip fix or file-removal option at all.
 
 ### 3. Classify findings and record confidence
 
@@ -94,6 +102,8 @@ Before changing files, follow [references/execution-policy.md](references/execut
 
 By default, only `SAFE / HIGH` findings are eligible for an automatic code cleanup, and even those must satisfy the finding-type execution rules. `SAFE / MEDIUM` findings need more evidence or review before modification. `REVIEW` findings stay unchanged unless the requested task explicitly authorizes the reviewed behavior or API change. `CONFIGURATION` findings should normally lead to a narrow Knip configuration correction rather than code deletion.
 
+In analysis-only mode, execution eligibility is hypothetical only. Report what would be eligible in a later cleanup task, then stop before changing source files, configuration, manifests, lockfiles, dependency state, generated files, or Git state.
+
 Prefer small, reversible batches. A reasonable order is:
 
 1. eligible unused dependencies;
@@ -111,11 +121,13 @@ Do not automatically remove:
 - generated files or fixtures that are intentionally retained;
 - root or shared dependencies merely because one workspace does not use them.
 
-For false positives, prefer improving Knip configuration over deleting intentional code.
+For false positives, prefer improving Knip configuration over deleting intentional code. In analysis-only mode, recommend the configuration correction but do not apply it.
 
 ### 5. Apply fixes conservatively
 
-Execute one small semantic batch at a time and keep the change within the requested scope.
+Skip this entire step in analysis-only mode.
+
+For cleanup tasks that authorize modification, execute one small semantic batch at a time and keep the change within the requested scope.
 
 If Knip auto-fix is appropriate, scope it by issue type rather than fixing everything at once. Examples:
 
@@ -155,13 +167,17 @@ Passing validation strengthens evidence but does not prove that external consume
 
 If a cleanup must be reverted, revert or narrow only changes introduced by that cleanup batch. Never use a destructive repository-wide reset when unrelated user work may exist.
 
+In analysis-only mode, run validation commands only when they are relevant to the requested analysis and are known not to rewrite project files or dependency state. The final repository-state check remains authoritative.
+
 ### 7. Rerun Knip
 
-Run Knip again after cleanup. Removing one unused item can expose additional dead code, so repeat the scan/classify/decide/fix/validate cycle when useful.
+For cleanup tasks, run Knip again after cleanup. Removing one unused item can expose additional dead code, so repeat the scan/classify/decide/fix/validate cycle when useful.
 
 For a monorepo cleanup that used a focused workspace scan, run a broader or full-project Knip check before finalizing when cross-workspace references could matter.
 
 Treat newly exposed findings as a new batch with their own classification, evidence, and execution decision rather than silently extending the previous cleanup.
+
+In analysis-only mode, no rerun-after-fix is needed because no fix should occur. Verify repository state and stop after classification and recommendations.
 
 Stop when:
 
@@ -170,7 +186,8 @@ Stop when:
 - remaining SAFE findings do not meet the execution threshold;
 - further changes would exceed the requested scope;
 - validation fails and the failure cannot be safely resolved within scope;
-- cleanup-owned edits cannot be separated safely from pre-existing user changes.
+- cleanup-owned edits cannot be separated safely from pre-existing user changes;
+- analysis-only classification and recommendations are complete.
 
 ## Reporting
 
@@ -188,8 +205,17 @@ Summarize:
 - what the final Knip run reports;
 - any remaining risks or findings that need review.
 
+For analysis-only work, also report:
+
+- that analysis-only mode was used;
+- whether Knip was available without installation;
+- that no cleanup or configuration change was performed;
+- the initial and final repository state when Git is available;
+- whether the repository-state invariant remained unchanged.
+
 Do not claim that code is safe to delete solely because Knip reports it as unused.
 Do not claim that a finding was introduced by a PR solely because its file appears in the diff.
 Do not claim that a workspace-local finding is safe without considering relevant package boundaries and cross-workspace consumers.
 Do not interpret HIGH confidence as permission to delete a REVIEW or CONFIGURATION finding.
 Do not use cleanup recovery as a reason to discard unrelated user work.
+Do not modify the repository during analysis-only work, even for a `SAFE / HIGH` finding.
