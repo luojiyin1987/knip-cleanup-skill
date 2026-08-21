@@ -23,6 +23,8 @@ For general cleanup, follow the workflow below across the requested repository s
 
 For PR or branch review, first follow [references/git-aware-review.md](references/git-aware-review.md). Use Git context to prioritize and attribute findings, but keep the SAFE, REVIEW, and CONFIGURATION risk classification independent from whether a finding is related to the diff.
 
+If the repository contains multiple workspaces, also follow [references/monorepo-cleanup.md](references/monorepo-cleanup.md). Treat workspace ownership, package boundaries, and cross-workspace consumers as part of the evidence for every non-trivial cleanup.
+
 Do not broaden a PR-scoped cleanup into unrelated repository-wide debt unless the task explicitly requests it.
 
 ## Workflow
@@ -39,6 +41,8 @@ Identify:
 - package entry points, `bin` entries, scripts, framework conventions, generated files, fixtures, and plugin directories;
 - available validation commands such as lint, typecheck, test, and build.
 
+For a monorepo, identify the manifest and public API boundary of each affected workspace instead of treating the root as the only package boundary.
+
 Do not add Knip to the project unless the task explicitly allows dependency changes. Prefer an existing local Knip installation. If Knip is unavailable, explain what is missing instead of silently changing the project.
 
 ### 2. Run Knip without fixing
@@ -54,6 +58,8 @@ bunx knip
 
 If the official Knip MCP server is available, `knip-run` may be used instead.
 
+For a targeted monorepo task, a Knip workspace filter may be useful for the first pass, but do not treat a filtered run as proof that cross-workspace consumers do not exist.
+
 Never start with `--fix` or `--allow-remove-files` before reviewing the findings.
 
 ### 3. Classify findings
@@ -66,7 +72,7 @@ Classify each relevant finding as one of:
 
 Use [references/risk-classification.md](references/risk-classification.md) for the decision rules.
 
-When evidence is incomplete, lower confidence instead of guessing.
+When evidence is incomplete, lower confidence instead of guessing. In a monorepo, evidence must include relevant cross-workspace usage and package metadata when those can affect the finding.
 
 ### 4. Propose a minimal cleanup
 
@@ -84,7 +90,8 @@ Do not automatically remove:
 - modules loaded through dynamic import, reflection, file-system discovery, or plugin registration;
 - side-effect-only modules;
 - framework convention files;
-- generated files or fixtures that are intentionally retained.
+- generated files or fixtures that are intentionally retained;
+- root or shared dependencies merely because one workspace does not use them.
 
 For false positives, prefer improving Knip configuration over deleting intentional code.
 
@@ -99,7 +106,7 @@ knip --fix-type exports,types
 
 Treat file deletion as a separate high-risk step. Do not use `--allow-remove-files` unless unused files have been reviewed and deleting them is explicitly within scope.
 
-Review all modified manifests and lockfiles when dependencies change.
+Review all modified manifests and lockfiles when dependencies change. In a monorepo, confirm that the dependency is owned by the manifest being changed and is not shared through repository-level tooling or policy.
 
 ### 6. Validate the project
 
@@ -116,9 +123,13 @@ pnpm build
 
 Do not invent validation commands that the project does not support.
 
+For monorepos, start with affected workspace checks when useful, then expand validation to dependent workspaces or repository-level checks when exports, dependencies, or package boundaries changed.
+
 ### 7. Rerun Knip
 
 Run Knip again after cleanup. Removing one unused item can expose additional dead code, so repeat the scan/classify/fix/validate cycle when useful.
+
+For a monorepo cleanup that used a focused workspace scan, run a broader or full-project Knip check before finalizing when cross-workspace references could matter.
 
 Stop when:
 
@@ -134,6 +145,7 @@ Summarize:
 - what Knip reported;
 - which findings were classified SAFE, REVIEW, or CONFIGURATION;
 - for PR/branch review, which findings are PR-ASSOCIATED, PRE-EXISTING, or UNCERTAIN when that attribution can be supported;
+- for monorepos, which workspaces were affected and which cross-workspace checks were considered;
 - what changed;
 - which validation commands ran and whether they passed;
 - what the final Knip run reports;
@@ -141,3 +153,4 @@ Summarize:
 
 Do not claim that code is safe to delete solely because Knip reports it as unused.
 Do not claim that a finding was introduced by a PR solely because its file appears in the diff.
+Do not claim that a workspace-local finding is safe without considering relevant package boundaries and cross-workspace consumers.
