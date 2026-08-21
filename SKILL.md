@@ -29,6 +29,8 @@ If the repository contains multiple workspaces, also follow [references/monorepo
 
 When a finding may be affected by dynamic imports, filesystem discovery, runtime registration, side effects, framework conventions, or another non-static entry path, follow [references/dynamic-runtime-usage.md](references/dynamic-runtime-usage.md). Investigate whether the specific candidate can participate in that runtime mechanism instead of assuming that all findings in a dynamically loaded project are equally risky.
 
+When repository evidence shows that intentional code is missing from Knip's current reachability or project model, follow [references/configuration-modeling.md](references/configuration-modeling.md). Prefer modeling real entry points, project boundaries, plugins, and workspace configuration over suppressing findings with broad ignore rules.
+
 For worked examples that apply the full classification, evidence, execution, validation, and rerun loop, see [references/end-to-end-scenarios.md](references/end-to-end-scenarios.md). The scenarios illustrate the normative references; they do not override them.
 
 If the user requests analysis, inspection, classification, or reporting **without modifications**, follow [references/analysis-only-mode.md](references/analysis-only-mode.md). Treat the repository as read-only, use only an existing Knip installation or approved external interface, stop before any cleanup action, and verify that final repository state matches the initial state when Git is available.
@@ -47,6 +49,7 @@ Identify:
 - workspace or monorepo layout;
 - whether Knip is already installed or configured;
 - package entry points, `bin` entries, scripts, framework conventions, generated files, fixtures, and plugin directories;
+- repository-controlled external invocation sources such as CI workflows, shell/task scripts, Deno commands, Docker/deployment configuration, migrations, code generators, and scheduled jobs when relevant;
 - available validation commands such as lint, typecheck, test, and build;
 - existing uncommitted changes when Git is available.
 
@@ -112,6 +115,8 @@ Use [references/risk-classification.md](references/risk-classification.md) for t
 
 For findings with possible runtime discovery or convention-based reachability, use [references/dynamic-runtime-usage.md](references/dynamic-runtime-usage.md) to trace the concrete runtime path. Confirmed intentional runtime reachability usually supports `CONFIGURATION` when Knip is missing that path; unresolved candidate reachability supports `REVIEW`; a dynamic mechanism that has been reasonably ruled out for the candidate does not by itself block normal `SAFE` evaluation.
 
+For `CONFIGURATION` findings, follow [references/configuration-modeling.md](references/configuration-modeling.md). First determine whether Knip should already discover the candidate through defaults, package metadata, scripts, CI workflow parsing, plugins, dynamic APIs, or workspace configuration. If a real graph edge is missing, prefer the narrowest correct model such as `entry` or `project` before issue suppression. Do not assume a GitHub Actions or package-script invocation needs manual `entry` configuration until automatic discovery has been checked.
+
 For each non-trivial finding, record the relevant supporting evidence, counter-evidence, and material unknowns, then assign **HIGH**, **MEDIUM**, or **LOW** confidence using [references/confidence-evidence.md](references/confidence-evidence.md).
 
 Confidence measures how strongly the evidence supports the classification. It is not the probability that deletion is safe. For example, `REVIEW / HIGH` means there is strong evidence that the finding requires review.
@@ -146,7 +151,7 @@ Do not automatically remove:
 - generated files or fixtures that are intentionally retained;
 - root or shared dependencies merely because one workspace does not use them.
 
-For false positives, prefer improving Knip configuration over deleting intentional code. In analysis-only mode, recommend the configuration correction but do not apply it.
+For false positives, follow [references/configuration-modeling.md](references/configuration-modeling.md). Prefer a narrow correction that models the real execution root or project boundary. Use targeted `ignore*` options only for justified reporting exceptions, and treat broad `ignore` as a last resort. In analysis-only mode, recommend the configuration correction but do not apply it.
 
 ### 5. Apply fixes conservatively
 
@@ -190,6 +195,8 @@ For monorepos, start with affected workspace checks when useful, then expand val
 
 Passing validation strengthens evidence but does not prove that external consumers or untested runtime discovery do not exist. Failed or unexplained validation blocks the next cleanup batch until understood.
 
+For an authorized Knip configuration change, treat the rerun as a modeling experiment: confirm the intended false positive or false-positive chain disappears for the expected reason, downstream code remains analyzed, and unrelated useful findings did not disappear unexpectedly. A lower total finding count alone is not sufficient validation.
+
 If a cleanup must be reverted, revert or narrow only changes introduced by that cleanup batch. Never use a destructive repository-wide reset when unrelated user work may exist.
 
 In analysis-only mode, run validation commands only when they are relevant to the requested analysis and are known not to rewrite project files or dependency state. The final repository-state check remains authoritative.
@@ -223,10 +230,11 @@ Summarize:
 - the strongest supporting evidence, counter-evidence, and material unknowns;
 - for export/type findings, relevant external and internal consumer evidence when it affects the action;
 - relevant dynamic runtime or convention-based reachability evidence when it affects classification;
+- for `CONFIGURATION` findings, the concrete repository behavior, missing Knip model relationship, and proposed modeling primitive such as `entry`, `project`, plugin/workspace configuration, or a justified targeted `ignore*`;
 - for PR/branch review, which findings are PR-ASSOCIATED, PRE-EXISTING, or UNCERTAIN when that attribution can be supported;
 - for monorepos, which workspaces were affected and which cross-workspace checks were considered;
 - which findings were eligible, blocked, or intentionally left for review/configuration;
-- the precise recommended/executed action, such as `remove dependency`, `delete unused file`, `remove export modifier`, `delete unused declaration`, or `keep and review`;
+- the precise recommended/executed action, such as `remove dependency`, `delete unused file`, `remove export modifier`, `delete unused declaration`, `add/correct Knip entry`, or `keep and review`;
 - what execution batches changed;
 - which validation commands ran and whether they passed;
 - what the final Knip run reports;
@@ -243,6 +251,9 @@ For analysis-only work, also report:
 Do not claim that code is safe to delete solely because Knip reports it as unused.
 Do not equate an unused export with an unused declaration.
 Do not delete a declaration without checking same-file consumers and relevant side effects.
+Do not use `ignoreFiles` or `ignoreDependencies` to repair a missing source-file entry path.
+Do not use broad `ignore` merely to make unresolved findings disappear.
+Do not override Knip `entry` or `project` without considering existing defaults, plugins, and workspace configuration that may be replaced.
 Do not claim that a finding was introduced by a PR solely because its file appears in the diff.
 Do not claim that a workspace-local finding is safe without considering relevant package boundaries and cross-workspace consumers.
 Do not interpret HIGH confidence as permission to delete a REVIEW or CONFIGURATION finding.
