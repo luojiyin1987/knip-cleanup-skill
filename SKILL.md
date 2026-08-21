@@ -28,6 +28,8 @@ If the repository contains multiple workspaces, also follow [references/monorepo
 
 When a finding may be affected by dynamic imports, filesystem discovery, runtime registration, side effects, framework conventions, or another non-static entry path, follow [references/dynamic-runtime-usage.md](references/dynamic-runtime-usage.md). Investigate whether the specific candidate can participate in that runtime mechanism instead of assuming that all findings in a dynamically loaded project are equally risky.
 
+For worked examples that apply the full classification, evidence, execution, validation, and rerun loop, see [references/end-to-end-scenarios.md](references/end-to-end-scenarios.md). The scenarios illustrate the normative references; they do not override them.
+
 Do not broaden a PR-scoped cleanup into unrelated repository-wide debt unless the task explicitly requests it.
 
 ## Workflow

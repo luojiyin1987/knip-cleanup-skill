@@ -39,7 +39,9 @@ For monorepos, the skill treats workspace ownership and package boundaries as pa
 
 For findings affected by dynamic imports, filesystem discovery, runtime registration, side effects, framework conventions, or non-import entry points, the skill investigates the concrete runtime path instead of treating every dynamic signal as automatically unsafe. Confirmed intentional runtime reachability points toward `CONFIGURATION`; unresolved candidate reachability points toward `REVIEW`; dynamic behavior that has been ruled out for the candidate can allow normal `SAFE` evaluation to continue.
 
-See [SKILL.md](SKILL.md) for the workflow, [references/risk-classification.md](references/risk-classification.md) for cleanup risk, [references/confidence-evidence.md](references/confidence-evidence.md) for the evidence model, [references/dynamic-runtime-usage.md](references/dynamic-runtime-usage.md) for runtime discovery and convention-based usage, [references/execution-policy.md](references/execution-policy.md) for action gates and batching, [references/git-aware-review.md](references/git-aware-review.md) for PR-scoped review, [references/monorepo-cleanup.md](references/monorepo-cleanup.md) for workspace-specific guidance, and [references/verification.md](references/verification.md) for validation and recovery.
+Worked end-to-end scenarios show how these independent rules combine for internal exports, dynamic plugins, public APIs, monorepo dependencies, and higher-risk file deletion. The scenarios illustrate the existing policy rather than defining new cleanup rules.
+
+See [SKILL.md](SKILL.md) for the workflow, [references/risk-classification.md](references/risk-classification.md) for cleanup risk, [references/confidence-evidence.md](references/confidence-evidence.md) for the evidence model, [references/dynamic-runtime-usage.md](references/dynamic-runtime-usage.md) for runtime discovery and convention-based usage, [references/execution-policy.md](references/execution-policy.md) for action gates and batching, [references/git-aware-review.md](references/git-aware-review.md) for PR-scoped review, [references/monorepo-cleanup.md](references/monorepo-cleanup.md) for workspace-specific guidance, [references/verification.md](references/verification.md) for validation and recovery, and [references/end-to-end-scenarios.md](references/end-to-end-scenarios.md) for worked examples of the complete decision and execution loop.
 
 ## Principles
 
@@ -80,7 +82,7 @@ This repository does not wrap or replace Knip and does not require its own runti
 
 ## Project status
 
-The skill currently covers repository cleanup, Git-aware PR/branch review, monorepo/workspace-aware cleanup, dynamic runtime usage investigation, evidence-based confidence reporting, and a conservative cleanup execution policy. Automation can be added separately without turning the project into a CLI or another MCP server.
+The skill currently covers repository cleanup, Git-aware PR/branch review, monorepo/workspace-aware cleanup, dynamic runtime usage investigation, evidence-based confidence reporting, a conservative cleanup execution policy, and worked end-to-end scenarios for applying the full decision loop. Automation can be added separately without turning the project into a CLI or another MCP server.
 
 ## License
 
