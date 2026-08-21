@@ -37,7 +37,9 @@ For pull requests and feature branches, the skill can also correlate Knip findin
 
 For monorepos, the skill treats workspace ownership and package boundaries as part of cleanup evidence. A workspace-filtered result is useful for focus, but it is not treated as proof that root tooling, dependent packages, or external package consumers are irrelevant.
 
-See [SKILL.md](SKILL.md) for the workflow, [references/risk-classification.md](references/risk-classification.md) for cleanup risk, [references/confidence-evidence.md](references/confidence-evidence.md) for the evidence model, [references/execution-policy.md](references/execution-policy.md) for action gates and batching, [references/git-aware-review.md](references/git-aware-review.md) for PR-scoped review, [references/monorepo-cleanup.md](references/monorepo-cleanup.md) for workspace-specific guidance, and [references/verification.md](references/verification.md) for validation and recovery.
+For findings affected by dynamic imports, filesystem discovery, runtime registration, side effects, framework conventions, or non-import entry points, the skill investigates the concrete runtime path instead of treating every dynamic signal as automatically unsafe. Confirmed intentional runtime reachability points toward `CONFIGURATION`; unresolved candidate reachability points toward `REVIEW`; dynamic behavior that has been ruled out for the candidate can allow normal `SAFE` evaluation to continue.
+
+See [SKILL.md](SKILL.md) for the workflow, [references/risk-classification.md](references/risk-classification.md) for cleanup risk, [references/confidence-evidence.md](references/confidence-evidence.md) for the evidence model, [references/dynamic-runtime-usage.md](references/dynamic-runtime-usage.md) for runtime discovery and convention-based usage, [references/execution-policy.md](references/execution-policy.md) for action gates and batching, [references/git-aware-review.md](references/git-aware-review.md) for PR-scoped review, [references/monorepo-cleanup.md](references/monorepo-cleanup.md) for workspace-specific guidance, and [references/verification.md](references/verification.md) for validation and recovery.
 
 ## Principles
 
@@ -46,6 +48,7 @@ See [SKILL.md](SKILL.md) for the workflow, [references/risk-classification.md](r
 - Do not assume `unused` means `safe to delete`.
 - Keep risk, confidence, Git attribution, and execution eligibility as separate decisions.
 - Prefer concrete repository evidence over filename or naming guesses.
+- Investigate whether the specific finding can participate in dynamic runtime behavior; do not classify an entire repository from the presence of one dynamic mechanism.
 - By default, only `SAFE / HIGH` findings are candidates for automatic cleanup.
 - Apply finding-type execution rules even after the confidence threshold is met.
 - Prefer configuration fixes for intentional code that Knip cannot discover.
@@ -77,7 +80,7 @@ This repository does not wrap or replace Knip and does not require its own runti
 
 ## Project status
 
-The skill currently covers repository cleanup, Git-aware PR/branch review, monorepo/workspace-aware cleanup, evidence-based confidence reporting, and a conservative cleanup execution policy. Automation can be added separately without turning the project into a CLI or another MCP server.
+The skill currently covers repository cleanup, Git-aware PR/branch review, monorepo/workspace-aware cleanup, dynamic runtime usage investigation, evidence-based confidence reporting, and a conservative cleanup execution policy. Automation can be added separately without turning the project into a CLI or another MCP server.
 
 ## License
 
