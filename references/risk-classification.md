@@ -2,7 +2,7 @@
 
 Use this reference to classify Knip findings before modifying code.
 
-The labels describe cleanup confidence, not absolute runtime safety. Static analysis can miss dynamic usage.
+The labels describe the appropriate cleanup posture, not confidence or absolute runtime safety. Static analysis can miss dynamic usage. Record confidence separately with [confidence-evidence.md](confidence-evidence.md).
 
 ## SAFE
 
@@ -18,9 +18,11 @@ Typical examples:
 
 Before classifying SAFE, check relevant package metadata and configuration when applicable.
 
+A SAFE classification does not automatically authorize a change. By default, automatic cleanup also requires HIGH confidence in the supporting evidence.
+
 ## REVIEW
 
-Use **REVIEW** when static analysis is plausible but runtime or compatibility usage cannot be ruled out confidently.
+Use **REVIEW** when static analysis is plausible but runtime or compatibility usage cannot be ruled out confidently, or when the item is intentionally part of a compatibility-sensitive surface.
 
 Common signals:
 
@@ -36,6 +38,8 @@ Common signals:
 - code whose removal could be a breaking API change even if the repository itself has no consumer.
 
 Do not automatically delete REVIEW findings.
+
+A finding can be `REVIEW / HIGH`: high confidence may mean there is strong evidence that review is required, not that removal is safe.
 
 ## CONFIGURATION
 
@@ -53,17 +57,20 @@ Typical examples:
 
 Prefer correcting or documenting Knip configuration rather than deleting intentional code.
 
-## Confidence rules
+## Classification rules
 
 When deciding between labels:
 
 1. Repository evidence overrides filename guesses.
 2. Public API compatibility requires more caution than internal cleanup.
-3. Dynamic loading lowers confidence.
-4. Side effects lower confidence.
-5. Framework conventions lower confidence unless Knip is configured for them.
-6. Passing tests increases confidence but does not prove absence of external consumers.
-7. If important evidence is missing, choose REVIEW rather than SAFE.
+3. Known or plausible dynamic loading usually requires REVIEW unless configuration clearly explains the finding.
+4. Side effects require REVIEW unless their runtime role can be ruled out.
+5. Framework conventions often indicate CONFIGURATION or REVIEW rather than SAFE.
+6. Passing tests supports a decision but does not prove absence of external consumers.
+7. In monorepos, package ownership and cross-workspace consumers are part of the classification evidence.
+8. If important evidence is missing, choose REVIEW rather than SAFE.
+
+After selecting a risk label, use [confidence-evidence.md](confidence-evidence.md) to record the evidence and assign HIGH, MEDIUM, or LOW confidence in that classification.
 
 ## Suggested finding notes
 
@@ -71,7 +78,8 @@ For non-trivial findings, record the evidence briefly:
 
 ```text
 Finding: src/legacy/parser.ts
-Classification: SAFE
+Risk: SAFE
+Confidence: HIGH
 Evidence:
 - no imports found
 - not exported from package metadata
@@ -83,7 +91,8 @@ For uncertain findings:
 
 ```text
 Finding: src/plugins/foo.ts
-Classification: REVIEW
+Risk: REVIEW
+Confidence: MEDIUM
 Evidence:
 - Knip reports the file unused
 - project contains runtime plugin discovery
