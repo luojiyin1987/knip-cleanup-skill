@@ -48,6 +48,45 @@ Risk and confidence remain separate:
 
 Confidence is **HIGH**, **MEDIUM**, or **LOW** confidence in that classification, not a probability that deletion is safe.
 
+## Finding ledger
+
+For full or multi-finding analyses, the bundled `scripts/finding-ledger.mjs` turns Knip's JSON reporter output into a deterministic ledger so completeness is enforced mechanically instead of relying on a model to count findings correctly.
+
+Example:
+
+```sh
+<existing-local-knip> --reporter json > /tmp/knip.json
+node <skill-dir>/scripts/finding-ledger.mjs build /tmp/knip.json /tmp/knip-ledger.json
+```
+
+Each finding receives a stable run-local ID such as `F0001` and keeps its issue type, file, name/symbol, namespace, and source position when available. The ledger also records the raw total, per-issue counts, and a fingerprint of the source Knip JSON.
+
+The model or reviewer fills separate dimensions rather than collapsing them into one status:
+
+```text
+classification: UNCLASSIFIED | SAFE | REVIEW | CONFIGURATION
+scope:          IN_SCOPE | OUT_OF_SCOPE
+execution:      UNDECIDED | ELIGIBLE | BLOCKED | NOT_APPLICABLE
+```
+
+Then verify against the original Knip output:
+
+```sh
+node <skill-dir>/scripts/finding-ledger.mjs verify /tmp/knip.json /tmp/knip-ledger.json
+```
+
+Verification fails if findings are missing, duplicated, altered, based on a different source report, or if any in-scope finding remains unclassified. Out-of-scope findings are still accounted for but do not need a cleanup classification.
+
+The ledger is deliberately **not** another analyzer. It does not infer dead code, inspect AST consumers, or decide risk. Knip and repository/CLI evidence remain responsible for facts; the model remains responsible for judgment.
+
+The script uses only Node.js built-ins and adds no npm dependency. Its tests can be run directly:
+
+```sh
+node --test scripts/finding-ledger.test.mjs
+```
+
+For analysis-only work, keep Knip JSON and ledger files outside the target repository, such as under `/tmp`, so the enforcement mechanism does not violate the zero-mutation contract.
+
 ## References are conditional
 
 `SKILL.md` contains the normal workflow. Load supporting references only when the situation requires them:
