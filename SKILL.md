@@ -26,6 +26,8 @@ For PR or branch review, first follow [references/git-aware-review.md](reference
 
 If the repository contains multiple workspaces, also follow [references/monorepo-cleanup.md](references/monorepo-cleanup.md). Treat workspace ownership, package boundaries, and cross-workspace consumers as part of the evidence for every non-trivial cleanup.
 
+When a finding may be affected by dynamic imports, filesystem discovery, runtime registration, side effects, framework conventions, or another non-static entry path, follow [references/dynamic-runtime-usage.md](references/dynamic-runtime-usage.md). Investigate whether the specific candidate can participate in that runtime mechanism instead of assuming that all findings in a dynamically loaded project are equally risky.
+
 Do not broaden a PR-scoped cleanup into unrelated repository-wide debt unless the task explicitly requests it.
 
 ## Workflow
@@ -75,6 +77,8 @@ Classify each relevant finding as one of:
 - **CONFIGURATION**: the code appears intentional and Knip likely needs better project configuration.
 
 Use [references/risk-classification.md](references/risk-classification.md) for the risk decision rules.
+
+For findings with possible runtime discovery or convention-based reachability, use [references/dynamic-runtime-usage.md](references/dynamic-runtime-usage.md) to trace the concrete runtime path. Confirmed intentional runtime reachability usually supports `CONFIGURATION` when Knip is missing that path; unresolved candidate reachability supports `REVIEW`; a dynamic mechanism that has been reasonably ruled out for the candidate does not by itself block normal `SAFE` evaluation.
 
 For each non-trivial finding, record the relevant supporting evidence, counter-evidence, and material unknowns, then assign **HIGH**, **MEDIUM**, or **LOW** confidence using [references/confidence-evidence.md](references/confidence-evidence.md).
 
@@ -173,6 +177,7 @@ Summarize:
 - what Knip reported;
 - each relevant finding's risk classification and confidence when non-trivial;
 - the strongest supporting evidence, counter-evidence, and material unknowns;
+- relevant dynamic runtime or convention-based reachability evidence when it affects classification;
 - for PR/branch review, which findings are PR-ASSOCIATED, PRE-EXISTING, or UNCERTAIN when that attribution can be supported;
 - for monorepos, which workspaces were affected and which cross-workspace checks were considered;
 - which findings were eligible, blocked, or intentionally left for review/configuration;
