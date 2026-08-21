@@ -42,11 +42,13 @@ For monorepos, the skill treats workspace ownership and package boundaries as pa
 
 For findings affected by dynamic imports, filesystem discovery, runtime registration, side effects, framework conventions, or non-import entry points, the skill investigates the concrete runtime path instead of treating every dynamic signal as automatically unsafe. Confirmed intentional runtime reachability points toward `CONFIGURATION`; unresolved candidate reachability points toward `REVIEW`; dynamic behavior that has been ruled out for the candidate can allow normal `SAFE` evaluation to continue.
 
+For `CONFIGURATION` findings, the skill models the repository's actual execution roots and project boundaries before suppressing output. It distinguishes `entry` from `project`, uses issue-specific `ignore*` options only for justified exceptions, and treats broad `ignore` as a last resort. External invocation sources such as package scripts, GitHub Actions, Deno commands, shell scripts, Docker/deployment configuration, migrations, and code generators are evidence to inspect, not automatic proof of reachability.
+
 Worked end-to-end scenarios show how these independent rules combine for internal exports, dynamic plugins, public APIs, monorepo dependencies, and higher-risk file deletion. The scenarios illustrate the existing policy rather than defining new cleanup rules.
 
 Analysis-only mode treats the repository as read-only. It does not install or temporarily fetch Knip, edit configuration, run auto-fixes, or perform otherwise eligible cleanup. When Git is available, the final repository state must match the initial state.
 
-See [SKILL.md](SKILL.md) for the workflow, [references/finding-semantics.md](references/finding-semantics.md) for issue-type semantics and action boundaries, [references/risk-classification.md](references/risk-classification.md) for cleanup risk, [references/confidence-evidence.md](references/confidence-evidence.md) for the evidence model, [references/dynamic-runtime-usage.md](references/dynamic-runtime-usage.md) for runtime discovery and convention-based usage, [references/execution-policy.md](references/execution-policy.md) for action gates and batching, [references/analysis-only-mode.md](references/analysis-only-mode.md) for read-only analysis safeguards, [references/git-aware-review.md](references/git-aware-review.md) for PR-scoped review, [references/monorepo-cleanup.md](references/monorepo-cleanup.md) for workspace-specific guidance, [references/verification.md](references/verification.md) for validation and recovery, and [references/end-to-end-scenarios.md](references/end-to-end-scenarios.md) for worked examples of the complete decision and execution loop.
+See [SKILL.md](SKILL.md) for the workflow, [references/finding-semantics.md](references/finding-semantics.md) for issue-type semantics and action boundaries, [references/risk-classification.md](references/risk-classification.md) for cleanup risk, [references/confidence-evidence.md](references/confidence-evidence.md) for the evidence model, [references/dynamic-runtime-usage.md](references/dynamic-runtime-usage.md) for runtime discovery and convention-based usage, [references/configuration-modeling.md](references/configuration-modeling.md) for `entry`, `project`, external entry paths, and targeted suppression, [references/execution-policy.md](references/execution-policy.md) for action gates and batching, [references/analysis-only-mode.md](references/analysis-only-mode.md) for read-only analysis safeguards, [references/git-aware-review.md](references/git-aware-review.md) for PR-scoped review, [references/monorepo-cleanup.md](references/monorepo-cleanup.md) for workspace-specific guidance, [references/verification.md](references/verification.md) for validation and recovery, and [references/end-to-end-scenarios.md](references/end-to-end-scenarios.md) for worked examples of the complete decision and execution loop.
 
 ## Principles
 
@@ -60,7 +62,8 @@ See [SKILL.md](SKILL.md) for the workflow, [references/finding-semantics.md](ref
 - Investigate whether the specific finding can participate in dynamic runtime behavior; do not classify an entire repository from the presence of one dynamic mechanism.
 - By default, only `SAFE / HIGH` findings are candidates for automatic cleanup.
 - Apply finding-type execution rules even after the confidence threshold is met.
-- Prefer configuration fixes for intentional code that Knip cannot discover.
+- Prefer modeling real entry points and project boundaries over suppressing intentional code with ignore rules.
+- Treat broad `ignore` as a last resort; `ignoreFiles` and `ignoreDependencies` do not repair missing source reachability.
 - Treat file deletion separately from lower-risk cleanup.
 - Make small semantic batches and inspect the resulting diff before continuing.
 - Stop on unexplained validation failures.
@@ -92,7 +95,7 @@ This repository does not wrap or replace Knip and does not require its own runti
 
 ## Project status
 
-The skill currently covers repository cleanup, Knip finding semantics, analysis-only safety, Git-aware PR/branch review, monorepo/workspace-aware cleanup, dynamic runtime usage investigation, evidence-based confidence reporting, a conservative cleanup execution policy, and worked end-to-end scenarios for applying the full decision loop. Automation can be added separately without turning the project into a CLI or another MCP server.
+The skill currently covers repository cleanup, Knip finding semantics, Knip configuration modeling, analysis-only safety, Git-aware PR/branch review, monorepo/workspace-aware cleanup, dynamic runtime usage investigation, evidence-based confidence reporting, a conservative cleanup execution policy, and worked end-to-end scenarios for applying the full decision loop. Automation can be added separately without turning the project into a CLI or another MCP server.
 
 ## License
 
