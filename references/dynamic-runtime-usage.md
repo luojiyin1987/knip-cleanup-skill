@@ -178,7 +178,7 @@ Do not add broad ignores merely because runtime behavior is difficult to investi
 
 ## 8. Record the runtime evidence explicitly
 
-Use the existing evidence vocabulary from [confidence-evidence.md](confidence-evidence.md): `SUPPORTS`, `CONTRADICTS`, and `UNKNOWN`.
+Use the evidence categories from [confidence-evidence.md](confidence-evidence.md): supporting evidence, counter-evidence, and material unknowns.
 
 Example of an unresolved plugin file:
 
@@ -187,10 +187,12 @@ Finding: src/plugins/legacy.ts
 Risk: REVIEW
 Confidence: HIGH
 
-Runtime evidence:
-- SUPPORTS: src/plugins/index.ts scans src/plugins/*.ts
-- SUPPORTS: legacy.ts matches the discovery glob
-- UNKNOWN: runtime configuration may exclude legacy.ts
+Supporting evidence:
+- src/plugins/index.ts scans src/plugins/*.ts
+- legacy.ts matches the discovery glob
+
+Material unknowns:
+- runtime configuration may exclude legacy.ts
 
 Action:
 - do not delete automatically
@@ -206,10 +208,10 @@ Finding: src/commands/deploy.ts
 Risk: CONFIGURATION
 Confidence: HIGH
 
-Runtime evidence:
-- SUPPORTS: the command loader scans src/commands/*.ts
-- SUPPORTS: deploy.ts matches the loader convention
-- SUPPORTS: package scripts start the command loader
+Supporting evidence:
+- the command loader scans src/commands/*.ts
+- deploy.ts matches the loader convention
+- package scripts start the command loader
 
 Action:
 - keep the file
@@ -223,12 +225,10 @@ Finding: src/legacy/parser.ts
 Risk: SAFE
 Confidence: HIGH
 
-Runtime evidence:
-- SUPPORTS: plugin discovery is limited to src/plugins/*.ts
-- SUPPORTS: parser.ts is outside the discovered path
-- SUPPORTS: no import, script, package metadata, or framework entry point reaches parser.ts
-- CONTRADICTS: none
-- UNKNOWN: none material
+Supporting evidence:
+- plugin discovery is limited to src/plugins/*.ts
+- parser.ts is outside the discovered path
+- no import, script, package metadata, or framework entry point reaches parser.ts
 
 Action:
 - continue through the normal execution gate

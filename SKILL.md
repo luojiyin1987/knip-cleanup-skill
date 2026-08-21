@@ -1,6 +1,6 @@
 ---
 name: knip-cleanup
-description: Safely investigate and clean up unused JavaScript and TypeScript code with Knip. Prefer repository and CLI evidence over heuristic rules, classify findings before changing code, keep cleanup scoped, validate each batch, and rerun Knip.
+description: Safely investigate and clean up unused JavaScript and TypeScript files, exports, types, and dependencies with Knip. Use for dead-code cleanup, Knip report review, unused dependency cleanup, and scoped monorepo cleanup. Classify findings before changes, validate each batch, and rerun Knip.
 ---
 
 # Knip Cleanup
@@ -13,7 +13,7 @@ Use this skill when a JavaScript or TypeScript project needs dead-code analysis 
 2. **Run report-only first.** Never start with unrestricted `--fix` or file removal.
 3. **Prefer existing repository/CLI evidence over additional Skill rules.** Search the repository, inspect package-manager metadata, Git state, and existing project commands before inventing framework heuristics.
 4. **A Knip finding is evidence, not deletion permission.** Interpret the finding at the correct action boundary: file, dependency declaration, export surface, or implementation.
-5. **Only `SAFE / HIGH` findings are eligible for automatic cleanup.** Eligibility is still subject to the requested scope and finding-specific blast radius.
+5. **Only `SAFE / HIGH` cleanup or `CONFIGURATION / HIGH` model correction is eligible.** Eligibility remains subject to scope and blast radius.
 6. **Analysis-only means zero repository mutation.** Do not install tools, edit files, change dependency state, or apply configuration fixes.
 7. **Change in small semantic batches.** Inspect the diff, run relevant existing validation, then rerun Knip.
 8. **Preserve user work.** Never use destructive Git recovery to make cleanup easier.
@@ -90,17 +90,20 @@ The ledger script does **not** decide whether code is dead. It only:
 - preserves issue type, file, symbol/name, namespace, and source position when Knip reports them;
 - records raw totals and per-issue counts;
 - fingerprints the source Knip JSON;
-- provides separate fields for classification, scope, execution state, exact action, unknowns, and notes.
+- provides separate fields for classification, confidence, scope, execution state, exact action, unknowns, and notes.
 
 Keep these dimensions separate:
 
 ```text
 classification: UNCLASSIFIED | SAFE | REVIEW | CONFIGURATION
+confidence:     UNASSESSED | HIGH | MEDIUM | LOW
 scope:          IN_SCOPE | OUT_OF_SCOPE
 execution:      UNDECIDED | ELIGIBLE | BLOCKED | NOT_APPLICABLE
 ```
 
-An `OUT_OF_SCOPE` finding may remain unclassified. Every `IN_SCOPE` finding must end as `SAFE`, `REVIEW`, or `CONFIGURATION`.
+An `OUT_OF_SCOPE` finding may remain unclassified. It must use `NOT_APPLICABLE` and have no action.
+
+Every `IN_SCOPE` finding must have a classification, confidence, execution decision, and exact action. `SAFE / HIGH` can use cleanup actions. `CONFIGURATION / HIGH` can use `correct Knip model`. `REVIEW` cannot use `ELIGIBLE`.
 
 After classification, verify the ledger against the original Knip JSON:
 
@@ -108,7 +111,7 @@ After classification, verify the ledger against the original Knip JSON:
 node <skill-dir>/scripts/finding-ledger.mjs verify /tmp/knip.json /tmp/knip-ledger.json
 ```
 
-Final verification must pass before claiming a complete multi-finding analysis. Verification fails when the source report changed, a finding is missing/duplicated/tampered with, status values are invalid, counts do not reconcile, or any in-scope finding remains unclassified.
+Final verification must pass before claiming a complete multi-finding analysis. Verification fails when the source report changed or a finding is missing, duplicated, or changed. It also fails when final states are incomplete or conflict with the execution gate.
 
 For a narrowly scoped question about one or a few already-identified findings, a ledger is optional when completeness is not in doubt.
 
@@ -151,7 +154,8 @@ Default gate:
 | SAFE | HIGH | eligible for a scoped change |
 | SAFE | MEDIUM/LOW | gather evidence or review |
 | REVIEW | any | keep unless explicitly authorized |
-| CONFIGURATION | any | keep code; recommend/model the real Knip relationship |
+| CONFIGURATION | HIGH | keep code; eligible to correct the Knip model |
+| CONFIGURATION | MEDIUM/LOW | keep code; gather evidence or recommend a model correction |
 
 Prefer precise actions:
 
@@ -160,6 +164,9 @@ Prefer precise actions:
 - remove export modifier;
 - delete unused declaration;
 - correct Knip model;
+- declare dependency;
+- correct dependency declaration;
+- correct unresolved reference;
 - keep and review;
 - no action in analysis-only mode.
 
