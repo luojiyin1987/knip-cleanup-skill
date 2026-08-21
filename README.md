@@ -2,7 +2,7 @@
 
 A small coding-agent skill for cleaning up unused JavaScript and TypeScript code with [Knip](https://knip.dev).
 
-Knip already provides the static analysis. This skill adds the decision workflow around it: classify findings, avoid deleting intentional runtime or public API code, apply small fixes, validate the project, and rerun Knip.
+Knip already provides the static analysis. This skill adds the decision workflow around it: classify findings, record evidence and confidence, avoid deleting intentional runtime or public API code, apply small fixes, validate the project, and rerun Knip.
 
 ## What it does
 
@@ -12,6 +12,7 @@ The skill guides an agent through this loop:
 inspect project
   -> run Knip without fixing
   -> classify findings
+  -> record evidence and confidence
   -> propose minimal cleanup
   -> apply safe changes
   -> lint / typecheck / test / build
@@ -21,8 +22,10 @@ inspect project
 Findings are grouped into three risk categories:
 
 - **SAFE** — strong evidence of internal dead code;
-- **REVIEW** — dynamic/runtime/public API usage cannot be ruled out;
+- **REVIEW** — dynamic/runtime/public API usage cannot be ruled out or compatibility review is required;
 - **CONFIGURATION** — the code appears intentional and Knip likely needs better configuration.
+
+Confidence is recorded separately as **HIGH**, **MEDIUM**, or **LOW**. It describes how strongly the available evidence supports the classification, not the probability that deletion is safe. `REVIEW / HIGH` is valid when there is strong evidence that human or compatibility review is required.
 
 For pull requests and feature branches, the skill can also correlate Knip findings with the Git diff. It keeps attribution separate from cleanup risk:
 
@@ -32,13 +35,16 @@ For pull requests and feature branches, the skill can also correlate Knip findin
 
 For monorepos, the skill treats workspace ownership and package boundaries as part of cleanup evidence. A workspace-filtered result is useful for focus, but it is not treated as proof that root tooling, dependent packages, or external package consumers are irrelevant.
 
-See [SKILL.md](SKILL.md) for the workflow, [references/risk-classification.md](references/risk-classification.md) for cleanup risk, [references/git-aware-review.md](references/git-aware-review.md) for PR-scoped review, and [references/monorepo-cleanup.md](references/monorepo-cleanup.md) for workspace-specific guidance.
+See [SKILL.md](SKILL.md) for the workflow, [references/risk-classification.md](references/risk-classification.md) for cleanup risk, [references/confidence-evidence.md](references/confidence-evidence.md) for the evidence model, [references/git-aware-review.md](references/git-aware-review.md) for PR-scoped review, and [references/monorepo-cleanup.md](references/monorepo-cleanup.md) for workspace-specific guidance.
 
 ## Principles
 
 - Do not reimplement Knip's analysis.
 - Run Knip in report-only mode before applying fixes.
 - Do not assume `unused` means `safe to delete`.
+- Keep risk, confidence, and Git attribution as separate decisions.
+- Prefer concrete repository evidence over filename or naming guesses.
+- By default, only `SAFE / HIGH` findings are candidates for automatic cleanup.
 - Prefer configuration fixes for intentional code that Knip cannot discover.
 - Treat file deletion separately from lower-risk cleanup.
 - Use the repository's existing validation commands.
@@ -63,7 +69,7 @@ This repository does not wrap or replace Knip and does not require its own runti
 
 ## Project status
 
-The skill currently covers repository cleanup, Git-aware PR/branch review, and monorepo/workspace-aware cleanup. Confidence scoring refinements and automation can be added separately without turning the project into a CLI or another MCP server.
+The skill currently covers repository cleanup, Git-aware PR/branch review, monorepo/workspace-aware cleanup, and evidence-based confidence reporting. Automation can be added separately without turning the project into a CLI or another MCP server.
 
 ## License
 
