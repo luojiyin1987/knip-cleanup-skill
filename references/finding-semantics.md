@@ -20,6 +20,20 @@ Common interpretations:
 
 Preserve the semantics of other Knip issue types rather than forcing them into a dead-code model.
 
+## Compatible actions
+
+The finding ledger enforces these action boundaries:
+
+| Knip issue | Compatible actions |
+| --- | --- |
+| `files` | delete unused file; correct Knip model; keep and review |
+| `dependencies` / `devDependencies` | remove dependency; correct Knip model; keep and review |
+| `exports` / `types` | remove export modifier; delete unused declaration; correct Knip model; keep and review |
+| `unlisted` | declare dependency; correct dependency declaration; keep and review |
+| `unresolved` | correct unresolved reference; correct Knip model; keep and review |
+
+Analysis-only mode can use `no action in analysis-only mode` for every issue. Unknown issue types fail closed. They only allow Knip model correction or review.
+
 ## Unused export is not unused declaration
 
 Always separate:

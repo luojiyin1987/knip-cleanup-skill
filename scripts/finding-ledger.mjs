@@ -20,6 +20,17 @@ const ACTIONS = new Set([
   'keep and review',
   'no action in analysis-only mode',
 ]);
+const REVIEW_ACTIONS = ['correct Knip model', 'keep and review'];
+const ISSUE_ACTIONS = new Map([
+  ['files', new Set(['delete unused file', ...REVIEW_ACTIONS])],
+  ['dependencies', new Set(['remove dependency', ...REVIEW_ACTIONS])],
+  ['devDependencies', new Set(['remove dependency', ...REVIEW_ACTIONS])],
+  ['exports', new Set(['remove export modifier', 'delete unused declaration', ...REVIEW_ACTIONS])],
+  ['types', new Set(['remove export modifier', 'delete unused declaration', ...REVIEW_ACTIONS])],
+  ['unlisted', new Set(['declare dependency', 'correct dependency declaration', 'keep and review'])],
+  ['unresolved', new Set(['correct unresolved reference', ...REVIEW_ACTIONS])],
+]);
+const DEFAULT_ISSUE_ACTIONS = new Set(REVIEW_ACTIONS);
 
 const METADATA_KEYS = new Set(['file', 'owners']);
 
@@ -206,10 +217,33 @@ function validateFinalFindingState(finding) {
     throw new Error(`${finding.id}: in-scope finding must have an exact action`);
   }
   if (
-    finding.execution === 'ELIGIBLE' &&
-    (finding.classification !== 'SAFE' || finding.confidence !== 'HIGH')
+    finding.action !== 'no action in analysis-only mode' &&
+    !(ISSUE_ACTIONS.get(finding.issue) ?? DEFAULT_ISSUE_ACTIONS).has(finding.action)
   ) {
-    throw new Error(`${finding.id}: only SAFE / HIGH findings can be eligible`);
+    throw new Error(`${finding.id}: action ${finding.action} is incompatible with ${finding.issue}`);
+  }
+  if (
+    finding.execution === 'ELIGIBLE' &&
+    finding.confidence !== 'HIGH'
+  ) {
+    throw new Error(`${finding.id}: only HIGH confidence findings can be eligible`);
+  }
+  if (
+    finding.execution === 'ELIGIBLE' &&
+    finding.classification === 'CONFIGURATION' &&
+    finding.action !== 'correct Knip model'
+  ) {
+    throw new Error(`${finding.id}: eligible CONFIGURATION finding must correct the Knip model`);
+  }
+  if (finding.execution === 'ELIGIBLE' && finding.classification === 'REVIEW') {
+    throw new Error(`${finding.id}: REVIEW findings cannot be eligible`);
+  }
+  if (
+    finding.execution === 'ELIGIBLE' &&
+    finding.action === 'correct Knip model' &&
+    finding.classification !== 'CONFIGURATION'
+  ) {
+    throw new Error(`${finding.id}: eligible Knip model correction must be CONFIGURATION`);
   }
   if (
     finding.execution === 'ELIGIBLE' &&
@@ -230,9 +264,6 @@ function validateFinalFindingState(finding) {
     throw new Error(`${finding.id}: analysis-only action must be NOT_APPLICABLE`);
   }
   if (finding.classification === 'CONFIGURATION') {
-    if (finding.execution === 'ELIGIBLE') {
-      throw new Error(`${finding.id}: CONFIGURATION findings cannot be eligible for cleanup`);
-    }
     if (
       ![
         'correct Knip model',

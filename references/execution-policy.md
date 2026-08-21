@@ -11,7 +11,8 @@ The question here is not whether Knip reported something. It is whether the requ
 | SAFE | HIGH | eligible for a scoped automatic change |
 | SAFE | MEDIUM/LOW | gather evidence or review first |
 | REVIEW | any | keep unless the user explicitly authorizes the reviewed behavior/API change |
-| CONFIGURATION | any | keep intentional code; correct or recommend the Knip model |
+| CONFIGURATION | HIGH | keep intentional code; correct the Knip model when authorized |
+| CONFIGURATION | MEDIUM/LOW | keep intentional code; gather evidence or recommend a model correction |
 
 `SAFE / HIGH` is eligibility, not permission for every possible deletion.
 

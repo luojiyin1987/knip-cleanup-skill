@@ -35,7 +35,7 @@ The Skill does **not** require extra analyzers. Optional graph/debug tools may b
 - A finding is evidence, not deletion permission.
 - Interpret the correct action boundary: file, dependency declaration, export surface, or implementation.
 - `unused export` does not mean `unused declaration`.
-- Only sufficiently supported `SAFE / HIGH` findings are eligible for automatic cleanup.
+- Only `SAFE / HIGH` cleanup or `CONFIGURATION / HIGH` model correction is eligible.
 - Analysis-only means zero repository mutation.
 - Work in small batches, inspect the diff, validate with existing project commands, and rerun Knip.
 - Preserve unrelated user work.
@@ -76,7 +76,7 @@ Then verify against the original Knip output:
 node <skill-dir>/scripts/finding-ledger.mjs verify /tmp/knip.json /tmp/knip-ledger.json
 ```
 
-Verification fails if findings are missing, duplicated, altered, or based on a different source report. Each in-scope finding needs a classification, confidence, execution decision, and exact action. Only `SAFE / HIGH` findings can use `ELIGIBLE`. Out-of-scope findings remain accounted for and must have no action.
+Verification fails if findings are missing, duplicated, altered, or based on a different source report. Each in-scope finding needs a classification, confidence, execution decision, and compatible action. `SAFE / HIGH` can use cleanup actions. `CONFIGURATION / HIGH` can correct the Knip model. Out-of-scope findings remain accounted for and must have no action.
 
 The ledger is deliberately **not** another analyzer. It does not infer dead code, inspect AST consumers, or decide risk. Knip and repository/CLI evidence remain responsible for facts; the model remains responsible for judgment.
 

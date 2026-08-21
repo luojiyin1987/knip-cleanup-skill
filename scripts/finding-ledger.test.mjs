@@ -53,11 +53,18 @@ test('builds a deterministic ledger from Knip JSON', () => {
 });
 
 function completeFinding(finding, overrides = {}) {
+  const actions = {
+    dependencies: 'remove dependency',
+    exports: 'delete unused declaration',
+    files: 'delete unused file',
+    types: 'delete unused declaration',
+    unlisted: 'declare dependency',
+  };
   Object.assign(finding, {
     classification: 'SAFE',
     confidence: 'HIGH',
     execution: 'ELIGIBLE',
-    action: 'delete unused declaration',
+    action: actions[finding.issue] ?? 'keep and review',
     ...overrides,
   });
 }
@@ -73,11 +80,6 @@ test('verifies a fully accounted ledger', () => {
     execution: 'BLOCKED',
     action: 'correct dependency declaration',
   });
-  const dependency = ledger.findings.find((finding) => finding.issue === 'dependencies');
-  if (dependency) {
-    dependency.action = 'remove dependency';
-  }
-
   const summary = verifyLedgerAgainstText(ledger, report);
   assert.equal(summary.rawFindings, 5);
   assert.equal(summary.unclassifiedInScope, 0);
@@ -159,7 +161,7 @@ test('fails when a REVIEW finding is eligible', () => {
 
   assert.throws(
     () => verifyLedgerAgainstText(ledger, report),
-    /only SAFE \/ HIGH findings can be eligible/,
+    /REVIEW findings cannot be eligible/,
   );
 });
 
@@ -170,7 +172,7 @@ test('fails when a SAFE MEDIUM finding is eligible', () => {
 
   assert.throws(
     () => verifyLedgerAgainstText(ledger, report),
-    /only SAFE \/ HIGH findings can be eligible/,
+    /only HIGH confidence findings can be eligible/,
   );
 });
 
@@ -207,7 +209,7 @@ test('fails when a CONFIGURATION finding has a deletion action', () => {
 
   assert.throws(
     () => verifyLedgerAgainstText(ledger, report),
-    /incompatible action/,
+    /action delete unused file is incompatible with dependencies/,
   );
 });
 
@@ -247,4 +249,100 @@ test('accepts an analysis-only CONFIGURATION finding', () => {
 
   const summary = verifyLedgerAgainstText(ledger, report);
   assert.equal(summary.classification.CONFIGURATION, 1);
+});
+
+test('rejects actions that do not match the Knip issue type', () => {
+  const incompatibleActions = {
+    dependencies: 'delete unused file',
+    exports: 'declare dependency',
+    files: 'remove dependency',
+    unlisted: 'remove export modifier',
+  };
+
+  for (const [issue, action] of Object.entries(incompatibleActions)) {
+    const ledger = buildLedgerFromText(report);
+    for (const finding of ledger.findings) completeFinding(finding);
+    const finding = ledger.findings.find((candidate) => candidate.issue === issue);
+    finding.action = action;
+
+    assert.throws(
+      () => verifyLedgerAgainstText(ledger, report),
+      new RegExp(`action ${action} is incompatible with ${issue}`),
+    );
+  }
+});
+
+test('rejects an export action for an unresolved finding', () => {
+  const unresolvedReport = JSON.stringify({
+    issues: [{ file: 'src/index.ts', unresolved: [{ name: './missing.js' }] }],
+  });
+  const ledger = buildLedgerFromText(unresolvedReport);
+  completeFinding(ledger.findings[0], { action: 'remove export modifier' });
+
+  assert.throws(
+    () => verifyLedgerAgainstText(ledger, unresolvedReport),
+    /action remove export modifier is incompatible with unresolved/,
+  );
+});
+
+test('accepts dependency and unresolved issue actions', () => {
+  const extendedReport = JSON.stringify({
+    issues: [{
+      file: 'package.json',
+      devDependencies: [{ name: 'vitest' }],
+      unresolved: [{ name: './missing.js' }],
+    }],
+  });
+  const ledger = buildLedgerFromText(extendedReport);
+  for (const finding of ledger.findings) {
+    completeFinding(finding, {
+      action: finding.issue === 'devDependencies'
+        ? 'remove dependency'
+        : 'correct unresolved reference',
+    });
+  }
+
+  const summary = verifyLedgerAgainstText(ledger, extendedReport);
+  assert.equal(summary.execution.ELIGIBLE, 2);
+});
+
+test('restricts unknown issue types to review actions', () => {
+  const unknownReport = JSON.stringify({
+    issues: [{ file: 'src/index.ts', futureIssue: [{ name: 'candidate' }] }],
+  });
+  const ledger = buildLedgerFromText(unknownReport);
+  completeFinding(ledger.findings[0], { action: 'delete unused declaration' });
+
+  assert.throws(
+    () => verifyLedgerAgainstText(ledger, unknownReport),
+    /action delete unused declaration is incompatible with futureIssue/,
+  );
+});
+
+test('accepts an eligible CONFIGURATION correction with high confidence', () => {
+  const ledger = buildLedgerFromText(report);
+  for (const finding of ledger.findings) completeFinding(finding);
+  completeFinding(ledger.findings[0], {
+    classification: 'CONFIGURATION',
+    action: 'correct Knip model',
+  });
+
+  const summary = verifyLedgerAgainstText(ledger, report);
+  assert.equal(summary.classification.CONFIGURATION, 1);
+  assert.equal(summary.execution.ELIGIBLE, 5);
+});
+
+test('rejects an eligible CONFIGURATION correction without high confidence', () => {
+  const ledger = buildLedgerFromText(report);
+  for (const finding of ledger.findings) completeFinding(finding);
+  completeFinding(ledger.findings[0], {
+    classification: 'CONFIGURATION',
+    confidence: 'MEDIUM',
+    action: 'correct Knip model',
+  });
+
+  assert.throws(
+    () => verifyLedgerAgainstText(ledger, report),
+    /only HIGH confidence findings can be eligible/,
+  );
 });

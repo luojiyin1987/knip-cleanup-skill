@@ -13,7 +13,7 @@ Use this skill when a JavaScript or TypeScript project needs dead-code analysis 
 2. **Run report-only first.** Never start with unrestricted `--fix` or file removal.
 3. **Prefer existing repository/CLI evidence over additional Skill rules.** Search the repository, inspect package-manager metadata, Git state, and existing project commands before inventing framework heuristics.
 4. **A Knip finding is evidence, not deletion permission.** Interpret the finding at the correct action boundary: file, dependency declaration, export surface, or implementation.
-5. **Only `SAFE / HIGH` findings are eligible for automatic cleanup.** Eligibility is still subject to the requested scope and finding-specific blast radius.
+5. **Only `SAFE / HIGH` cleanup or `CONFIGURATION / HIGH` model correction is eligible.** Eligibility remains subject to scope and blast radius.
 6. **Analysis-only means zero repository mutation.** Do not install tools, edit files, change dependency state, or apply configuration fixes.
 7. **Change in small semantic batches.** Inspect the diff, run relevant existing validation, then rerun Knip.
 8. **Preserve user work.** Never use destructive Git recovery to make cleanup easier.
@@ -103,7 +103,7 @@ execution:      UNDECIDED | ELIGIBLE | BLOCKED | NOT_APPLICABLE
 
 An `OUT_OF_SCOPE` finding may remain unclassified. It must use `NOT_APPLICABLE` and have no action.
 
-Every `IN_SCOPE` finding must have a classification, confidence, execution decision, and exact action. Only `SAFE / HIGH` can use `ELIGIBLE`. `REVIEW` and `CONFIGURATION` findings must not be eligible for automatic cleanup.
+Every `IN_SCOPE` finding must have a classification, confidence, execution decision, and exact action. `SAFE / HIGH` can use cleanup actions. `CONFIGURATION / HIGH` can use `correct Knip model`. `REVIEW` cannot use `ELIGIBLE`.
 
 After classification, verify the ledger against the original Knip JSON:
 
@@ -154,7 +154,8 @@ Default gate:
 | SAFE | HIGH | eligible for a scoped change |
 | SAFE | MEDIUM/LOW | gather evidence or review |
 | REVIEW | any | keep unless explicitly authorized |
-| CONFIGURATION | any | keep code; recommend/model the real Knip relationship |
+| CONFIGURATION | HIGH | keep code; eligible to correct the Knip model |
+| CONFIGURATION | MEDIUM/LOW | keep code; gather evidence or recommend a model correction |
 
 Prefer precise actions:
 
