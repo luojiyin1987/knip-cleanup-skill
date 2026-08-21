@@ -1,6 +1,6 @@
 ---
 name: knip-cleanup
-description: Safely clean up unused files, exports, types, and dependencies in JavaScript and TypeScript projects with Knip. Classify findings before changing code, record evidence and confidence, apply scoped execution rules, validate changes, and rerun Knip until the result is stable.
+description: Safely clean up unused files, exports, types, and dependencies in JavaScript and TypeScript projects with Knip. Interpret each finding before changing code, classify risk, record evidence and confidence, apply scoped execution rules, validate changes, and rerun Knip until the result is stable.
 ---
 
 # Knip Cleanup
@@ -10,6 +10,7 @@ Use this skill when a JavaScript or TypeScript project needs dead-code cleanup w
 ## Goals
 
 - Use Knip as the source of static-analysis findings instead of reimplementing its analysis.
+- Preserve the semantics of each Knip issue type before deciding what kind of cleanup is possible.
 - Separate likely dead code from findings that may be caused by dynamic runtime behavior or missing configuration.
 - Make non-trivial decisions evidence-based and explainable.
 - Translate analysis into small, explicitly gated cleanup actions.
@@ -78,11 +79,32 @@ For a targeted monorepo task, a Knip workspace filter may be useful for the firs
 
 Never start with `--fix` or `--allow-remove-files` before reviewing the findings. In analysis-only mode, do not run any Knip fix or file-removal option at all.
 
-### 3. Classify findings and record confidence
+### 3. Interpret findings, classify risk, and record confidence
+
+Before assigning cleanup risk, follow [references/finding-semantics.md](references/finding-semantics.md). Preserve what the Knip issue type actually establishes.
+
+In particular:
+
+- `files` is a reachability finding, not deletion permission;
+- `dependencies` / `devDependencies` means no recognized dependency reference was found, not that every non-import use has been ruled out;
+- `exports` means no external reference to the export surface was found, not that the declaration is dead;
+- `types` means no external reference to the exported type surface was found, not that the type declaration has no internal consumers;
+- `unlisted`, `binaries`, and `unresolved` are diagnostic findings and must not be treated as ordinary dead-code removal candidates.
+
+For every non-trivial `exports` or `types` finding where the proposed action depends on declaration liveness, record:
+
+```text
+External consumers: none | found | unknown
+Internal consumers: none | found | unknown
+```
+
+Inspect the declaring file itself. Do not infer internal non-use from an import search.
+
+If internal consumers exist, the likely action is to **remove the export modifier**, not delete the declaration. Delete a declaration only after internal consumers, public exposure, runtime reachability, and relevant initializer or top-level side effects have been ruled out.
 
 Classify each relevant finding as one of:
 
-- **SAFE**: strong evidence that the item is internal and unused;
+- **SAFE**: strong evidence that the item is internal and unused at the proposed action boundary;
 - **REVIEW**: runtime, public API, side-effect, or convention-based usage cannot be ruled out, or compatibility review is required;
 - **CONFIGURATION**: the code appears intentional and Knip likely needs better project configuration.
 
@@ -93,6 +115,8 @@ For findings with possible runtime discovery or convention-based reachability, u
 For each non-trivial finding, record the relevant supporting evidence, counter-evidence, and material unknowns, then assign **HIGH**, **MEDIUM**, or **LOW** confidence using [references/confidence-evidence.md](references/confidence-evidence.md).
 
 Confidence measures how strongly the evidence supports the classification. It is not the probability that deletion is safe. For example, `REVIEW / HIGH` means there is strong evidence that the finding requires review.
+
+Do not assign `SAFE / HIGH` to a group solely because the items share one Knip issue type. Either establish that the required evidence applies to every named member or split out exceptions and unknowns.
 
 In a monorepo, evidence must include relevant cross-workspace usage and package metadata when those can affect the finding.
 
@@ -107,9 +131,10 @@ In analysis-only mode, execution eligibility is hypothetical only. Report what w
 Prefer small, reversible batches. A reasonable order is:
 
 1. eligible unused dependencies;
-2. eligible internal exports and types;
-3. other high-confidence internal findings;
-4. unused files only after the stricter file-deletion gate is satisfied.
+2. eligible internal export surfaces and types;
+3. eligible declarations whose implementation liveness has also been established;
+4. other high-confidence internal findings;
+5. unused files only after the stricter file-deletion gate is satisfied.
 
 Do not automatically remove:
 
@@ -171,11 +196,11 @@ In analysis-only mode, run validation commands only when they are relevant to th
 
 ### 7. Rerun Knip
 
-For cleanup tasks, run Knip again after cleanup. Removing one unused item can expose additional dead code, so repeat the scan/classify/decide/fix/validate cycle when useful.
+For cleanup tasks, run Knip again after cleanup. Removing one unused item can expose additional dead code, so repeat the scan/interpret/classify/decide/fix/validate cycle when useful.
 
 For a monorepo cleanup that used a focused workspace scan, run a broader or full-project Knip check before finalizing when cross-workspace references could matter.
 
-Treat newly exposed findings as a new batch with their own classification, evidence, and execution decision rather than silently extending the previous cleanup.
+Treat newly exposed findings as a new batch with their own semantics, classification, evidence, and execution decision rather than silently extending the previous cleanup.
 
 In analysis-only mode, no rerun-after-fix is needed because no fix should occur. Verify repository state and stop after classification and recommendations.
 
@@ -193,13 +218,15 @@ Stop when:
 
 Summarize:
 
-- what Knip reported;
+- what Knip reported, preserving the issue types;
 - each relevant finding's risk classification and confidence when non-trivial;
 - the strongest supporting evidence, counter-evidence, and material unknowns;
+- for export/type findings, relevant external and internal consumer evidence when it affects the action;
 - relevant dynamic runtime or convention-based reachability evidence when it affects classification;
 - for PR/branch review, which findings are PR-ASSOCIATED, PRE-EXISTING, or UNCERTAIN when that attribution can be supported;
 - for monorepos, which workspaces were affected and which cross-workspace checks were considered;
 - which findings were eligible, blocked, or intentionally left for review/configuration;
+- the precise recommended/executed action, such as `remove dependency`, `delete unused file`, `remove export modifier`, `delete unused declaration`, or `keep and review`;
 - what execution batches changed;
 - which validation commands ran and whether they passed;
 - what the final Knip run reports;
@@ -214,6 +241,8 @@ For analysis-only work, also report:
 - whether the repository-state invariant remained unchanged.
 
 Do not claim that code is safe to delete solely because Knip reports it as unused.
+Do not equate an unused export with an unused declaration.
+Do not delete a declaration without checking same-file consumers and relevant side effects.
 Do not claim that a finding was introduced by a PR solely because its file appears in the diff.
 Do not claim that a workspace-local finding is safe without considering relevant package boundaries and cross-workspace consumers.
 Do not interpret HIGH confidence as permission to delete a REVIEW or CONFIGURATION finding.
