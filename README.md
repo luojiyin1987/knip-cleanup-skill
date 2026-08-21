@@ -11,6 +11,7 @@ The skill guides an agent through this loop:
 ```text
 inspect project
   -> run Knip without fixing
+  -> interpret finding semantics
   -> classify findings
   -> record evidence and confidence
   -> apply the execution gate
@@ -29,6 +30,8 @@ Confidence is recorded separately as **HIGH**, **MEDIUM**, or **LOW**. It descri
 
 The execution policy is a separate gate. By default, `SAFE / HIGH` is eligible for a scoped automatic cleanup, but the finding still has to satisfy type-specific rules. File deletion is stricter than internal export cleanup, and public API findings remain review actions unless explicitly authorized.
 
+Knip issue types are interpreted before cleanup risk is assigned. An unused file is a reachability finding, an unused dependency is a dependency-declaration finding, and an unused export is evidence about the export surface rather than proof that the declaration itself is dead. For unused exports and exported types, internal consumers must be considered separately from external consumers before choosing between removing an export modifier and deleting a declaration.
+
 For pull requests and feature branches, the skill can also correlate Knip findings with the Git diff. It keeps attribution separate from cleanup risk:
 
 - **PR-ASSOCIATED** — the branch likely caused or exposed the finding;
@@ -43,13 +46,15 @@ Worked end-to-end scenarios show how these independent rules combine for interna
 
 Analysis-only mode treats the repository as read-only. It does not install or temporarily fetch Knip, edit configuration, run auto-fixes, or perform otherwise eligible cleanup. When Git is available, the final repository state must match the initial state.
 
-See [SKILL.md](SKILL.md) for the workflow, [references/risk-classification.md](references/risk-classification.md) for cleanup risk, [references/confidence-evidence.md](references/confidence-evidence.md) for the evidence model, [references/dynamic-runtime-usage.md](references/dynamic-runtime-usage.md) for runtime discovery and convention-based usage, [references/execution-policy.md](references/execution-policy.md) for action gates and batching, [references/analysis-only-mode.md](references/analysis-only-mode.md) for read-only analysis safeguards, [references/git-aware-review.md](references/git-aware-review.md) for PR-scoped review, [references/monorepo-cleanup.md](references/monorepo-cleanup.md) for workspace-specific guidance, [references/verification.md](references/verification.md) for validation and recovery, and [references/end-to-end-scenarios.md](references/end-to-end-scenarios.md) for worked examples of the complete decision and execution loop.
+See [SKILL.md](SKILL.md) for the workflow, [references/finding-semantics.md](references/finding-semantics.md) for issue-type semantics and action boundaries, [references/risk-classification.md](references/risk-classification.md) for cleanup risk, [references/confidence-evidence.md](references/confidence-evidence.md) for the evidence model, [references/dynamic-runtime-usage.md](references/dynamic-runtime-usage.md) for runtime discovery and convention-based usage, [references/execution-policy.md](references/execution-policy.md) for action gates and batching, [references/analysis-only-mode.md](references/analysis-only-mode.md) for read-only analysis safeguards, [references/git-aware-review.md](references/git-aware-review.md) for PR-scoped review, [references/monorepo-cleanup.md](references/monorepo-cleanup.md) for workspace-specific guidance, [references/verification.md](references/verification.md) for validation and recovery, and [references/end-to-end-scenarios.md](references/end-to-end-scenarios.md) for worked examples of the complete decision and execution loop.
 
 ## Principles
 
 - Do not reimplement Knip's analysis.
 - Run Knip in report-only mode before applying fixes.
+- Interpret the Knip issue type before choosing a cleanup action.
 - Do not assume `unused` means `safe to delete`.
+- Do not equate an unused export with an unused declaration; check same-file consumers and side effects before deleting implementation code.
 - Keep risk, confidence, Git attribution, and execution eligibility as separate decisions.
 - Prefer concrete repository evidence over filename or naming guesses.
 - Investigate whether the specific finding can participate in dynamic runtime behavior; do not classify an entire repository from the presence of one dynamic mechanism.
@@ -87,7 +92,7 @@ This repository does not wrap or replace Knip and does not require its own runti
 
 ## Project status
 
-The skill currently covers repository cleanup, analysis-only safety, Git-aware PR/branch review, monorepo/workspace-aware cleanup, dynamic runtime usage investigation, evidence-based confidence reporting, a conservative cleanup execution policy, and worked end-to-end scenarios for applying the full decision loop. Automation can be added separately without turning the project into a CLI or another MCP server.
+The skill currently covers repository cleanup, Knip finding semantics, analysis-only safety, Git-aware PR/branch review, monorepo/workspace-aware cleanup, dynamic runtime usage investigation, evidence-based confidence reporting, a conservative cleanup execution policy, and worked end-to-end scenarios for applying the full decision loop. Automation can be added separately without turning the project into a CLI or another MCP server.
 
 ## License
 
