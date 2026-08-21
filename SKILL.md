@@ -15,6 +15,16 @@ Use this skill when a JavaScript or TypeScript project needs dead-code cleanup w
 - Never treat a successful `knip --fix` run as sufficient validation.
 - Keep changes easy to review and revert.
 
+## Choose the review scope
+
+Determine whether the task is a general repository cleanup or is scoped to a pull request, feature branch, or commit range.
+
+For general cleanup, follow the workflow below across the requested repository scope.
+
+For PR or branch review, first follow [references/git-aware-review.md](references/git-aware-review.md). Use Git context to prioritize and attribute findings, but keep the SAFE, REVIEW, and CONFIGURATION risk classification independent from whether a finding is related to the diff.
+
+Do not broaden a PR-scoped cleanup into unrelated repository-wide debt unless the task explicitly requests it.
+
 ## Workflow
 
 ### 1. Inspect the project
@@ -123,9 +133,11 @@ Summarize:
 
 - what Knip reported;
 - which findings were classified SAFE, REVIEW, or CONFIGURATION;
+- for PR/branch review, which findings are PR-ASSOCIATED, PRE-EXISTING, or UNCERTAIN when that attribution can be supported;
 - what changed;
 - which validation commands ran and whether they passed;
 - what the final Knip run reports;
 - any remaining risks or findings that need review.
 
 Do not claim that code is safe to delete solely because Knip reports it as unused.
+Do not claim that a finding was introduced by a PR solely because its file appears in the diff.
