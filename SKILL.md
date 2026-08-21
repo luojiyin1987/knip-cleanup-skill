@@ -73,6 +73,45 @@ If Knip is unavailable, report the limitation instead of silently installing or 
 
 For monorepos, a workspace-filtered run may be useful for focus, but it is not proof that cross-workspace consumers do not exist.
 
+### Finding ledger for full or multi-finding analysis
+
+When classifying a full Knip scan or a non-trivial set of findings, prefer the JSON reporter and use the bundled ledger script to make completeness mechanical rather than relying on the model to count findings correctly.
+
+Capture the Knip JSON without modifying the target repository. For analysis-only work, keep temporary outputs outside the repository, for example under `/tmp`:
+
+```sh
+<existing-local-knip> --reporter json > /tmp/knip.json
+node <skill-dir>/scripts/finding-ledger.mjs build /tmp/knip.json /tmp/knip-ledger.json
+```
+
+The ledger script does **not** decide whether code is dead. It only:
+
+- assigns a deterministic `F0001`, `F0002`, ... identifier to every raw finding;
+- preserves issue type, file, symbol/name, namespace, and source position when Knip reports them;
+- records raw totals and per-issue counts;
+- fingerprints the source Knip JSON;
+- provides separate fields for classification, scope, execution state, exact action, unknowns, and notes.
+
+Keep these dimensions separate:
+
+```text
+classification: UNCLASSIFIED | SAFE | REVIEW | CONFIGURATION
+scope:          IN_SCOPE | OUT_OF_SCOPE
+execution:      UNDECIDED | ELIGIBLE | BLOCKED | NOT_APPLICABLE
+```
+
+An `OUT_OF_SCOPE` finding may remain unclassified. Every `IN_SCOPE` finding must end as `SAFE`, `REVIEW`, or `CONFIGURATION`.
+
+After classification, verify the ledger against the original Knip JSON:
+
+```sh
+node <skill-dir>/scripts/finding-ledger.mjs verify /tmp/knip.json /tmp/knip-ledger.json
+```
+
+Final verification must pass before claiming a complete multi-finding analysis. Verification fails when the source report changed, a finding is missing/duplicated/tampered with, status values are invalid, counts do not reconcile, or any in-scope finding remains unclassified.
+
+For a narrowly scoped question about one or a few already-identified findings, a ledger is optional when completeness is not in doubt.
+
 ## 4. Interpret the finding before classifying it
 
 Follow [references/finding-semantics.md](references/finding-semantics.md) when the action boundary is not obvious.
@@ -120,8 +159,9 @@ Prefer precise actions:
 - delete unused file;
 - remove export modifier;
 - delete unused declaration;
-- add/correct Knip configuration;
-- keep and review.
+- correct Knip model;
+- keep and review;
+- no action in analysis-only mode.
 
 In analysis-only mode, stop after recommendations. Even `SAFE / HIGH` findings remain unchanged.
 
@@ -155,6 +195,8 @@ Report enough to make the decision reviewable without reproducing every rule in 
 - blocked/review/configuration findings;
 - validation performed;
 - final Knip result after authorized cleanup.
+
+When a finding ledger was used, include its raw/per-issue totals and final reconciliation. Do not claim a complete multi-finding analysis unless ledger verification passes with zero in-scope unclassified findings.
 
 For analysis-only tasks, also report that no repository change was performed and whether the Git-visible final state matches the initial state.
 
