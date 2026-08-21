@@ -1,6 +1,6 @@
 ---
 name: knip-cleanup
-description: Safely clean up unused files, exports, types, and dependencies in JavaScript and TypeScript projects with Knip. Classify findings before changing code, prefer configuration fixes for false positives, validate changes, and rerun Knip until the result is stable.
+description: Safely clean up unused files, exports, types, and dependencies in JavaScript and TypeScript projects with Knip. Classify findings before changing code, record evidence and confidence, prefer configuration fixes for false positives, validate changes, and rerun Knip until the result is stable.
 ---
 
 # Knip Cleanup
@@ -11,6 +11,7 @@ Use this skill when a JavaScript or TypeScript project needs dead-code cleanup w
 
 - Use Knip as the source of static-analysis findings instead of reimplementing its analysis.
 - Separate likely dead code from findings that may be caused by dynamic runtime behavior or missing configuration.
+- Make non-trivial decisions evidence-based and explainable.
 - Apply the smallest reasonable cleanup first.
 - Never treat a successful `knip --fix` run as sufficient validation.
 - Keep changes easy to review and revert.
@@ -62,26 +63,32 @@ For a targeted monorepo task, a Knip workspace filter may be useful for the firs
 
 Never start with `--fix` or `--allow-remove-files` before reviewing the findings.
 
-### 3. Classify findings
+### 3. Classify findings and record confidence
 
 Classify each relevant finding as one of:
 
 - **SAFE**: strong evidence that the item is internal and unused;
-- **REVIEW**: runtime, public API, side-effect, or convention-based usage cannot be ruled out;
+- **REVIEW**: runtime, public API, side-effect, or convention-based usage cannot be ruled out, or compatibility review is required;
 - **CONFIGURATION**: the code appears intentional and Knip likely needs better project configuration.
 
-Use [references/risk-classification.md](references/risk-classification.md) for the decision rules.
+Use [references/risk-classification.md](references/risk-classification.md) for the risk decision rules.
 
-When evidence is incomplete, lower confidence instead of guessing. In a monorepo, evidence must include relevant cross-workspace usage and package metadata when those can affect the finding.
+For each non-trivial finding, record the relevant supporting evidence, counter-evidence, and material unknowns, then assign **HIGH**, **MEDIUM**, or **LOW** confidence using [references/confidence-evidence.md](references/confidence-evidence.md).
+
+Confidence measures how strongly the evidence supports the classification. It is not the probability that deletion is safe. For example, `REVIEW / HIGH` means there is strong evidence that the finding requires review.
+
+In a monorepo, evidence must include relevant cross-workspace usage and package metadata when those can affect the finding.
 
 ### 4. Propose a minimal cleanup
 
 Prefer small, reversible batches. A reasonable order is:
 
-1. clearly unused dependencies;
-2. clearly unused internal exports and types;
+1. `SAFE / HIGH` unused dependencies;
+2. `SAFE / HIGH` internal exports and types;
 3. other high-confidence internal findings;
 4. unused files only after stronger review.
+
+By default, only `SAFE / HIGH` findings are eligible for automatic cleanup. `SAFE / MEDIUM` findings need more evidence or review before modification.
 
 Do not automatically remove:
 
@@ -108,6 +115,8 @@ Treat file deletion as a separate high-risk step. Do not use `--allow-remove-fil
 
 Review all modified manifests and lockfiles when dependencies change. In a monorepo, confirm that the dependency is owned by the manifest being changed and is not shared through repository-level tooling or policy.
 
+If new evidence contradicts the classification during cleanup, reclassify or lower confidence before continuing.
+
 ### 6. Validate the project
 
 Run the relevant project checks after each meaningful cleanup batch. Follow [references/verification.md](references/verification.md).
@@ -125,6 +134,8 @@ Do not invent validation commands that the project does not support.
 
 For monorepos, start with affected workspace checks when useful, then expand validation to dependent workspaces or repository-level checks when exports, dependencies, or package boundaries changed.
 
+Passing validation strengthens evidence but does not prove that external consumers or untested runtime discovery do not exist. Failed or unexplained validation blocks automatic cleanup until understood.
+
 ### 7. Rerun Knip
 
 Run Knip again after cleanup. Removing one unused item can expose additional dead code, so repeat the scan/classify/fix/validate cycle when useful.
@@ -135,6 +146,7 @@ Stop when:
 
 - the requested cleanup scope is complete;
 - remaining findings are REVIEW or CONFIGURATION items;
+- remaining SAFE findings do not have enough evidence for the requested action;
 - further changes would exceed the requested scope;
 - validation fails and the failure cannot be safely resolved within scope.
 
@@ -143,7 +155,8 @@ Stop when:
 Summarize:
 
 - what Knip reported;
-- which findings were classified SAFE, REVIEW, or CONFIGURATION;
+- each relevant finding's risk classification and confidence when non-trivial;
+- the strongest supporting evidence, counter-evidence, and material unknowns;
 - for PR/branch review, which findings are PR-ASSOCIATED, PRE-EXISTING, or UNCERTAIN when that attribution can be supported;
 - for monorepos, which workspaces were affected and which cross-workspace checks were considered;
 - what changed;
@@ -154,3 +167,4 @@ Summarize:
 Do not claim that code is safe to delete solely because Knip reports it as unused.
 Do not claim that a finding was introduced by a PR solely because its file appears in the diff.
 Do not claim that a workspace-local finding is safe without considering relevant package boundaries and cross-workspace consumers.
+Do not interpret HIGH confidence as permission to delete a REVIEW or CONFIGURATION finding.
