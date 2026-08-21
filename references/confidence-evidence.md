@@ -1,247 +1,68 @@
-# Confidence and evidence model
+# Confidence and evidence
 
-Use this reference to make Knip cleanup decisions explainable and repeatable.
+Use this reference when a Knip finding is not trivial enough to classify from one decisive fact.
 
-The model keeps three questions separate:
+## Keep three decisions separate
 
-1. **Risk** — what kind of action is appropriate? `SAFE`, `REVIEW`, or `CONFIGURATION`.
-2. **Confidence** — how strong is the evidence for that risk classification? `HIGH`, `MEDIUM`, or `LOW`.
-3. **Attribution** — for Git-aware review, is the finding `PR-ASSOCIATED`, `PRE-EXISTING`, or `UNCERTAIN`?
+- **Risk**: `SAFE`, `REVIEW`, or `CONFIGURATION`.
+- **Confidence**: `HIGH`, `MEDIUM`, or `LOW` confidence in that classification.
+- **Execution eligibility**: whether the requested task may actually change the repository.
 
-Confidence is **not** a probability that deletion is safe. A finding can be `REVIEW / HIGH` when there is strong evidence that human or compatibility review is required.
+`HIGH` does not mean "safe to delete." `REVIEW / HIGH` and `CONFIGURATION / HIGH` are valid outcomes.
 
-Do not invent numeric confidence percentages.
+## Prefer concrete evidence over checklists
 
-## Evidence dimensions
+Use the smallest set of repository/CLI evidence that materially resolves the decision. Useful sources include:
 
-For each non-trivial finding, inspect the dimensions that can materially change the decision.
+- Knip's finding and issue type;
+- repository search for imports, scripts, configuration references, runtime registrations, or external invocation paths;
+- same-file consumers for export/type findings;
+- package/public API metadata;
+- package-manager dependency ownership or `why`/`explain` information;
+- workspace consumers in a monorepo;
+- Git evidence when attribution matters;
+- existing validation results after an authorized change.
 
-### 1. Static reachability
+Do not add a framework-specific rule when repository evidence can answer the question directly.
 
-Useful evidence includes:
+## Record only material evidence
 
-- Knip reports the item unused;
-- repository search finds no static imports or consumers;
-- re-export chains have been checked;
-- the item is not referenced from scripts or configuration.
-
-Knip output alone is evidence, but it is not enough for `SAFE / HIGH`.
-
-### 2. Public API exposure
-
-Check relevant package metadata and API surfaces:
-
-- `exports`;
-- `main`;
-- `module`;
-- `types`;
-- `bin`;
-- documented or intentionally published entry points.
-
-A repository may have no internal consumer while external consumers still depend on the API.
-
-### 3. Runtime discovery and side effects
-
-Look for runtime mechanisms static analysis may not fully prove:
-
-- dynamic `import()`;
-- computed module names;
-- file-system discovery;
-- plugin registration;
-- dependency injection or reflection;
-- framework conventions;
-- side-effect-only imports;
-- top-level registration behavior.
-
-Unresolved runtime discovery is counter-evidence against a `SAFE` classification.
-
-### 4. Workspace and ownership boundaries
-
-In monorepos, check:
-
-- which manifest owns the dependency or entry point;
-- cross-workspace consumers;
-- root-level tooling and shared dependencies;
-- dependent packages that consume public exports;
-- whether a filtered Knip run omitted relevant repository context.
-
-A workspace-local result is not sufficient evidence by itself.
-
-### 5. Git causality
-
-For PR or branch review, Git evidence can explain why an item became unused:
-
-- the final consumer was removed;
-- an entry point changed;
-- a feature implementation was deleted;
-- a dependency became unnecessary after a refactor.
-
-Git causality helps attribution and prioritization. It does not make the cleanup safe by itself.
-
-### 6. Validation
-
-Use the repository's existing checks, such as:
-
-- lint;
-- typecheck;
-- targeted tests;
-- broader tests;
-- build or package checks;
-- final Knip run.
-
-Passing validation strengthens a classification but does not prove that external consumers or untested runtime discovery do not exist.
-
-## Record evidence explicitly
-
-For each important dimension, record one of:
-
-- **SUPPORTS** — evidence supports the current classification;
-- **CONTRADICTS** — evidence conflicts with the current classification;
-- **UNKNOWN** — important evidence could not be established.
-
-Prefer concrete repository evidence over filename or directory-name guesses.
-
-Example:
+For a non-trivial finding, capture:
 
 ```text
-Finding: src/legacy/parser.ts
-Risk: SAFE
-Confidence: HIGH
-Evidence:
-- SUPPORTS: Knip reports the file unused
-- SUPPORTS: no imports or re-exports found
-- SUPPORTS: not exposed by package metadata
-- SUPPORTS: no runtime/configuration reference found
-- SUPPORTS: test and build pass after removal
-Unknowns: none material
-```
-
-## Confidence levels
-
-### HIGH
-
-Use **HIGH** when the evidence needed for the chosen classification has been checked and no material contradiction remains.
-
-For `SAFE / HIGH`, normally require evidence covering all relevant boundaries:
-
-- static reachability checked;
-- public API exposure ruled out;
-- runtime/convention-based loading reasonably ruled out;
-- workspace ownership and cross-workspace consumers checked when applicable;
-- relevant validation passes after the change when a change has been applied.
-
-`REVIEW / HIGH` is appropriate when strong evidence shows that the item is public, dynamically loaded, compatibility-sensitive, or otherwise unsuitable for automatic cleanup.
-
-`CONFIGURATION / HIGH` is appropriate when strong evidence shows the code is intentional and Knip configuration is the real gap.
-
-### MEDIUM
-
-Use **MEDIUM** when the current classification is supported, but one material evidence dimension is incomplete or indirect.
-
-Examples:
-
-- an internal export appears unused, but broader validation is unavailable;
-- a dependency has no static references, but a repository tool may invoke its binary indirectly;
-- workspace consumers were checked, but external package consumers cannot be assessed;
-- a PR clearly removed the final repository consumer, but API compatibility remains uncertain.
-
-Do not treat `SAFE / MEDIUM` as an automatic-fix candidate by default. Gather more evidence or request review.
-
-### LOW
-
-Use **LOW** when the classification relies mostly on weak signals or material contradictions remain unresolved.
-
-Examples:
-
-- only the Knip finding has been inspected;
-- the decision is based on a filename or directory name;
-- package metadata has not been checked;
-- dynamic loading is plausible but unexplored;
-- a workspace-filtered run is the only analysis performed;
-- validation fails or cannot be interpreted;
-- repository evidence conflicts with the proposed classification.
-
-A `LOW` finding should not be changed automatically.
-
-## Evidence quality rules
-
-Use these rules when evidence conflicts:
-
-1. Direct repository metadata is stronger than naming conventions.
-2. Actual imports, registrations, scripts, and configuration are stronger than assumptions about how a file is used.
-3. Public API exposure outweighs the absence of internal consumers.
-4. Known dynamic loading outweighs a static "unused" result.
-5. A trusted base/current comparison is stronger attribution evidence than "the file changed in this PR".
-6. Full repository or dependency-aware workspace analysis is stronger than an isolated workspace result.
-7. Passing tests are supporting evidence, not proof of no external usage.
-8. Failed validation blocks automatic cleanup until the failure is understood.
-
-## Automatic-action threshold
-
-By default:
-
-| Risk | Confidence | Default action |
-| --- | --- | --- |
-| SAFE | HIGH | eligible for a small automatic cleanup |
-| SAFE | MEDIUM | inspect further or request review |
-| SAFE | LOW | do not change automatically |
-| REVIEW | any | do not change automatically |
-| CONFIGURATION | any | prefer configuration or documentation changes |
-
-Explicit task scope can authorize a reviewed breaking API change or other higher-risk action, but confidence labels must still reflect the evidence honestly.
-
-## Downgrade and reclassification rules
-
-When new evidence appears, update the decision instead of defending the original label.
-
-Examples:
-
-- discovering a package `exports` entry changes a candidate from `SAFE` to `REVIEW`;
-- discovering framework convention loading may change `SAFE` to `CONFIGURATION` or `REVIEW`;
-- finding a cross-workspace consumer changes `SAFE` to `REVIEW` or invalidates the unused assumption;
-- a failed build after deletion removes the basis for `SAFE / HIGH`;
-- a clean broader scan and successful validation can raise `SAFE / MEDIUM` to `SAFE / HIGH` when no material unknown remains.
-
-## Suggested report shape
-
-```text
-Finding: packages/parser/src/legacy.ts:parseLegacy
-Risk: SAFE
-Confidence: HIGH
-Attribution: PR-ASSOCIATED
-
 Supporting evidence:
-- Knip reports the export unused
-- branch removed its final repository consumer
-- symbol is not part of package exports
-- no dynamic/configuration reference found
-- dependent workspace checks pass
+- ...
 
 Counter-evidence:
-- none found
+- ...
 
-Unknowns:
-- none material
+Material unknowns:
+- ...
 
-Action:
-- remove the unused internal export
+Risk: SAFE | REVIEW | CONFIGURATION
+Confidence: HIGH | MEDIUM | LOW
 ```
 
-For an uncertain public API finding:
+Omit empty categories when they add no value.
 
-```text
-Finding: packages/core/src/index.ts:legacyApi
-Risk: REVIEW
-Confidence: HIGH
-Attribution: PR-ASSOCIATED
+## Confidence direction
 
-Supporting evidence:
-- branch removed the final internal consumer
-- package export map still exposes the symbol
+- **HIGH** — the decisive evidence is direct and relevant; no material unknown remains for the classification.
+- **MEDIUM** — evidence leans clearly one way, but at least one material uncertainty remains.
+- **LOW** — evidence is sparse, indirect, contradictory, or the relevant boundary has not been inspected.
 
-Counter-evidence to automatic removal:
-- published API may have external consumers
+A finding should not receive `SAFE / HIGH` merely because Knip reports it or because repository search found no obvious import. The proposed action boundary must also be understood.
 
-Action:
-- leave unchanged unless breaking API removal is explicitly in scope
-```
+For groups of findings, apply one classification only when the same decisive evidence genuinely covers every named member. Otherwise split exceptions and unknowns.
+
+## Evidence is directional
+
+Evidence can:
+
+- **support** a classification;
+- **contradict** it;
+- remain **unknown**.
+
+Do not manufacture numeric confidence scores. The goal is reviewable reasoning, not fake precision.
+
+If new evidence appears during cleanup or validation, update the classification or confidence instead of defending the earlier decision.

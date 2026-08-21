@@ -1,101 +1,73 @@
 # knip-cleanup-skill
 
-A small coding-agent skill for cleaning up unused JavaScript and TypeScript code with [Knip](https://knip.dev).
+A small coding-agent Skill for safely acting on [Knip](https://knip.dev) findings in JavaScript and TypeScript repositories.
 
-Knip already provides the static analysis. This skill adds the decision and execution workflow around it: classify findings, record evidence and confidence, apply scoped cleanup rules, avoid deleting intentional runtime or public API code, validate each change batch, and rerun Knip.
+Knip already does the static analysis. This Skill does not try to become another unused-code detector or a copy of Knip's documentation. It adds a thin decision and execution layer around the analyzer.
 
-## What it does
+## Design principle
 
-The skill guides an agent through this loop:
+> Prefer existing repository/CLI evidence over additional Skill rules.
+
+Use Knip to produce findings, then use evidence already available in the repository and developer environment to resolve ambiguity:
 
 ```text
-inspect project
-  -> run Knip without fixing
-  -> interpret finding semantics
-  -> classify findings
-  -> record evidence and confidence
-  -> apply the execution gate
-  -> make one small cleanup batch
-  -> inspect diff and validate
-  -> rerun Knip
+Knip finding
+    ↓
+repository / CLI evidence
+    ↓
+risk + confidence + action boundary
+    ↓
+small authorized change
+    ↓
+git diff + existing validation
+    ↓
+Knip rerun
 ```
 
-Findings are grouped into three risk categories:
+Typical evidence sources include repository search (`rg`), Git state/diffs, package-manager dependency information such as `npm explain` / `npm why` or `pnpm why`, and the project's existing lint/typecheck/test/build commands.
 
-- **SAFE** — strong evidence of internal dead code;
-- **REVIEW** — dynamic/runtime/public API usage cannot be ruled out or compatibility review is required;
-- **CONFIGURATION** — the code appears intentional and Knip likely needs better configuration.
+The Skill does **not** require extra analyzers. Optional graph/debug tools may be useful when already available, but they should not become mandatory dependencies or new layers of policy.
 
-Confidence is recorded separately as **HIGH**, **MEDIUM**, or **LOW**. It describes how strongly the available evidence supports the classification, not the probability that deletion is safe. `REVIEW / HIGH` is valid when there is strong evidence that human or compatibility review is required.
+## Core contract
 
-The execution policy is a separate gate. By default, `SAFE / HIGH` is eligible for a scoped automatic cleanup, but the finding still has to satisfy type-specific rules. File deletion is stricter than internal export cleanup, and public API findings remain review actions unless explicitly authorized.
+- Knip is the primary analyzer; do not reimplement it.
+- Run Knip report-only before fixes.
+- A finding is evidence, not deletion permission.
+- Interpret the correct action boundary: file, dependency declaration, export surface, or implementation.
+- `unused export` does not mean `unused declaration`.
+- Only sufficiently supported `SAFE / HIGH` findings are eligible for automatic cleanup.
+- Analysis-only means zero repository mutation.
+- Work in small batches, inspect the diff, validate with existing project commands, and rerun Knip.
+- Preserve unrelated user work.
 
-Knip issue types are interpreted before cleanup risk is assigned. An unused file is a reachability finding, an unused dependency is a dependency-declaration finding, and an unused export is evidence about the export surface rather than proof that the declaration itself is dead. For unused exports and exported types, internal consumers must be considered separately from external consumers before choosing between removing an export modifier and deleting a declaration.
+Risk and confidence remain separate:
 
-For pull requests and feature branches, the skill can also correlate Knip findings with the Git diff. It keeps attribution separate from cleanup risk:
+- **SAFE** — evidence supports the proposed cleanup action.
+- **REVIEW** — material uncertainty or compatibility risk remains.
+- **CONFIGURATION** — code appears intentional but Knip's model is missing the real relationship.
 
-- **PR-ASSOCIATED** — the branch likely caused or exposed the finding;
-- **PRE-EXISTING** — a trusted baseline shows the finding already existed;
-- **UNCERTAIN** — available Git evidence is not enough to attribute it safely.
+Confidence is **HIGH**, **MEDIUM**, or **LOW** confidence in that classification, not a probability that deletion is safe.
 
-For monorepos, the skill treats workspace ownership and package boundaries as part of cleanup evidence. A workspace-filtered result is useful for focus, but it is not treated as proof that root tooling, dependent packages, or external package consumers are irrelevant.
+## References are conditional
 
-For findings affected by dynamic imports, filesystem discovery, runtime registration, side effects, framework conventions, or non-import entry points, the skill investigates the concrete runtime path instead of treating every dynamic signal as automatically unsafe. Confirmed intentional runtime reachability points toward `CONFIGURATION`; unresolved candidate reachability points toward `REVIEW`; dynamic behavior that has been ruled out for the candidate can allow normal `SAFE` evaluation to continue.
+`SKILL.md` contains the normal workflow. Load supporting references only when the situation requires them:
 
-For `CONFIGURATION` findings, the skill models the repository's actual execution roots and project boundaries before suppressing output. It distinguishes `entry` from `project`, uses issue-specific `ignore*` options only for justified exceptions, and treats broad `ignore` as a last resort. External invocation sources such as package scripts, GitHub Actions, Deno commands, shell scripts, Docker/deployment configuration, migrations, and code generators are evidence to inspect, not automatic proof of reachability.
+- [finding semantics](references/finding-semantics.md) — action-boundary questions such as export surface vs declaration
+- [analysis-only mode](references/analysis-only-mode.md) — read-only tasks
+- [Git-aware review](references/git-aware-review.md) — PR/branch attribution
+- [monorepo cleanup](references/monorepo-cleanup.md) — workspace/package boundaries
+- [dynamic runtime usage](references/dynamic-runtime-usage.md) — runtime discovery or side effects
+- [configuration modeling](references/configuration-modeling.md) — repository behavior disagrees with Knip's model
+- [risk classification](references/risk-classification.md) and [confidence evidence](references/confidence-evidence.md) — non-trivial decisions
+- [execution policy](references/execution-policy.md) and [verification](references/verification.md) — higher-risk changes and validation
 
-Worked end-to-end scenarios show how these independent rules combine for internal exports, dynamic plugins, public APIs, monorepo dependencies, and higher-risk file deletion. The scenarios illustrate the existing policy rather than defining new cleanup rules.
+The references should capture stable Agent behavior, not duplicate evolving Knip option documentation. When exact Knip configuration semantics matter, consult current Knip documentation.
 
-Analysis-only mode treats the repository as read-only. It does not install or temporarily fetch Knip, edit configuration, run auto-fixes, or perform otherwise eligible cleanup. When Git is available, the final repository state must match the initial state.
+## Knip availability
 
-See [SKILL.md](SKILL.md) for the workflow, [references/finding-semantics.md](references/finding-semantics.md) for issue-type semantics and action boundaries, [references/risk-classification.md](references/risk-classification.md) for cleanup risk, [references/confidence-evidence.md](references/confidence-evidence.md) for the evidence model, [references/dynamic-runtime-usage.md](references/dynamic-runtime-usage.md) for runtime discovery and convention-based usage, [references/configuration-modeling.md](references/configuration-modeling.md) for `entry`, `project`, external entry paths, and targeted suppression, [references/execution-policy.md](references/execution-policy.md) for action gates and batching, [references/analysis-only-mode.md](references/analysis-only-mode.md) for read-only analysis safeguards, [references/git-aware-review.md](references/git-aware-review.md) for PR-scoped review, [references/monorepo-cleanup.md](references/monorepo-cleanup.md) for workspace-specific guidance, [references/verification.md](references/verification.md) for validation and recovery, and [references/end-to-end-scenarios.md](references/end-to-end-scenarios.md) for worked examples of the complete decision and execution loop.
+Use an existing local Knip installation or approved interface. Do not silently add Knip to a repository. In analysis-only mode, do not install or temporarily fetch it through a package runner.
 
-## Principles
-
-- Do not reimplement Knip's analysis.
-- Run Knip in report-only mode before applying fixes.
-- Interpret the Knip issue type before choosing a cleanup action.
-- Do not assume `unused` means `safe to delete`.
-- Do not equate an unused export with an unused declaration; check same-file consumers and side effects before deleting implementation code.
-- Keep risk, confidence, Git attribution, and execution eligibility as separate decisions.
-- Prefer concrete repository evidence over filename or naming guesses.
-- Investigate whether the specific finding can participate in dynamic runtime behavior; do not classify an entire repository from the presence of one dynamic mechanism.
-- By default, only `SAFE / HIGH` findings are candidates for automatic cleanup.
-- Apply finding-type execution rules even after the confidence threshold is met.
-- Prefer modeling real entry points and project boundaries over suppressing intentional code with ignore rules.
-- Treat broad `ignore` as a last resort; `ignoreFiles` and `ignoreDependencies` do not repair missing source reachability.
-- Treat file deletion separately from lower-risk cleanup.
-- Make small semantic batches and inspect the resulting diff before continuing.
-- Stop on unexplained validation failures.
-- Preserve unrelated user work; cleanup recovery must not use destructive repository-wide resets.
-- In analysis-only mode, do not modify repository or dependency state and verify the final worktree matches the initial worktree when Git is available.
-- Use the repository's existing validation commands.
-- Rerun Knip after cleanup because removing dead code can expose more dead code.
-- In PR review, use Git context to prioritize findings without hiding unrelated analysis results.
-- Do not attribute a finding to a PR solely because its file changed.
-- In monorepos, check workspace ownership, public package metadata, and relevant cross-workspace consumers before cleanup.
-
-## Knip integration
-
-Use an existing local Knip installation when available, for example:
-
-```sh
-pnpm exec knip
-```
-
-Only use a package-manager runner after confirming that Knip is already available locally. Do not use `npx`, `npm exec`, `bunx`, or a similar runner to download or temporarily install Knip for analysis-only work.
-
-The skill can also work with Knip's official MCP server when the agent environment exposes `knip-run`.
-
-For monorepos, Knip's `--workspace` filter may be used to focus a first pass on affected workspaces when appropriate. Broader validation and a full Knip run may still be needed before finalizing cross-workspace changes.
-
-When auto-fix is appropriate, prefer scoped issue types such as `knip --fix-type dependencies` or `knip --fix-type exports,types`. The skill does not treat unrestricted `knip --fix` as the default execution path. Auto-fix is never part of analysis-only mode.
-
-This repository does not wrap or replace Knip and does not require its own runtime dependency.
-
-## Project status
-
-The skill currently covers repository cleanup, Knip finding semantics, Knip configuration modeling, analysis-only safety, Git-aware PR/branch review, monorepo/workspace-aware cleanup, dynamic runtime usage investigation, evidence-based confidence reporting, a conservative cleanup execution policy, and worked end-to-end scenarios for applying the full decision loop. Automation can be added separately without turning the project into a CLI or another MCP server.
+This repository does not wrap or replace Knip and has no runtime dependency on it.
 
 ## License
 
