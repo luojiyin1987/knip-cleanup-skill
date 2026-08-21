@@ -5,6 +5,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
 const CLASSIFICATIONS = new Set(['UNCLASSIFIED', 'SAFE', 'REVIEW', 'CONFIGURATION']);
+const CONFIDENCE_LEVELS = new Set(['UNASSESSED', 'HIGH', 'MEDIUM', 'LOW']);
 const SCOPES = new Set(['IN_SCOPE', 'OUT_OF_SCOPE']);
 const EXECUTION_STATES = new Set(['UNDECIDED', 'ELIGIBLE', 'BLOCKED', 'NOT_APPLICABLE']);
 const ACTIONS = new Set([
@@ -13,6 +14,9 @@ const ACTIONS = new Set([
   'remove export modifier',
   'delete unused declaration',
   'correct Knip model',
+  'declare dependency',
+  'correct dependency declaration',
+  'correct unresolved reference',
   'keep and review',
   'no action in analysis-only mode',
 ]);
@@ -136,7 +140,7 @@ function buildLedgerFromText(text) {
   const findings = flattenKnipReport(report);
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     source: {
       format: 'knip-json-reporter',
       sha256: sha256(text),
@@ -146,6 +150,7 @@ function buildLedgerFromText(text) {
     findings: findings.map((finding) => ({
       ...finding,
       classification: 'UNCLASSIFIED',
+      confidence: 'UNASSESSED',
       scope: 'IN_SCOPE',
       execution: 'UNDECIDED',
       action: null,
@@ -165,6 +170,9 @@ function validateFindingState(finding) {
   if (!CLASSIFICATIONS.has(finding.classification)) {
     throw new Error(`${finding.id}: invalid classification ${finding.classification}`);
   }
+  if (!CONFIDENCE_LEVELS.has(finding.confidence)) {
+    throw new Error(`${finding.id}: invalid confidence ${finding.confidence}`);
+  }
   if (!SCOPES.has(finding.scope)) {
     throw new Error(`${finding.id}: invalid scope ${finding.scope}`);
   }
@@ -177,8 +185,68 @@ function validateFindingState(finding) {
   assertStringArray(finding.unknowns ?? [], `${finding.id}.unknowns`);
 }
 
+function validateFinalFindingState(finding) {
+  if (finding.scope === 'OUT_OF_SCOPE') {
+    if (finding.execution !== 'NOT_APPLICABLE' || finding.action !== null) {
+      throw new Error(`${finding.id}: out-of-scope findings must have no action`);
+    }
+    return;
+  }
+
+  if (finding.classification === 'UNCLASSIFIED') {
+    throw new Error(`${finding.id}: in-scope finding is unclassified`);
+  }
+  if (finding.confidence === 'UNASSESSED') {
+    throw new Error(`${finding.id}: in-scope finding has unassessed confidence`);
+  }
+  if (finding.execution === 'UNDECIDED') {
+    throw new Error(`${finding.id}: in-scope finding has undecided execution`);
+  }
+  if (finding.action === null) {
+    throw new Error(`${finding.id}: in-scope finding must have an exact action`);
+  }
+  if (
+    finding.execution === 'ELIGIBLE' &&
+    (finding.classification !== 'SAFE' || finding.confidence !== 'HIGH')
+  ) {
+    throw new Error(`${finding.id}: only SAFE / HIGH findings can be eligible`);
+  }
+  if (
+    finding.execution === 'ELIGIBLE' &&
+    ['keep and review', 'no action in analysis-only mode'].includes(finding.action)
+  ) {
+    throw new Error(`${finding.id}: eligible finding must have an executable action`);
+  }
+  if (
+    finding.execution === 'NOT_APPLICABLE' &&
+    finding.action !== 'no action in analysis-only mode'
+  ) {
+    throw new Error(`${finding.id}: in-scope NOT_APPLICABLE finding must use the analysis-only action`);
+  }
+  if (
+    finding.action === 'no action in analysis-only mode' &&
+    finding.execution !== 'NOT_APPLICABLE'
+  ) {
+    throw new Error(`${finding.id}: analysis-only action must be NOT_APPLICABLE`);
+  }
+  if (finding.classification === 'CONFIGURATION') {
+    if (finding.execution === 'ELIGIBLE') {
+      throw new Error(`${finding.id}: CONFIGURATION findings cannot be eligible for cleanup`);
+    }
+    if (
+      ![
+        'correct Knip model',
+        'keep and review',
+        'no action in analysis-only mode',
+      ].includes(finding.action)
+    ) {
+      throw new Error(`${finding.id}: CONFIGURATION finding has an incompatible action`);
+    }
+  }
+}
+
 function verifyLedgerAgainstText(ledger, text) {
-  if (!ledger || ledger.schemaVersion !== 1 || !Array.isArray(ledger.findings)) {
+  if (!ledger || ledger.schemaVersion !== 2 || !Array.isArray(ledger.findings)) {
     throw new Error('Unsupported or invalid finding ledger');
   }
 
@@ -224,6 +292,7 @@ function verifyLedgerAgainstText(ledger, text) {
     }
 
     validateFindingState(finding);
+    validateFinalFindingState(finding);
   }
 
   const missing = canonical.findings.filter((finding) => !keys.has(finding.key));
@@ -243,6 +312,7 @@ function verifyLedgerAgainstText(ledger, text) {
 
 function summarizeLedger(ledger) {
   const classification = { SAFE: 0, REVIEW: 0, CONFIGURATION: 0, UNCLASSIFIED: 0 };
+  const confidence = { HIGH: 0, MEDIUM: 0, LOW: 0, UNASSESSED: 0 };
   const execution = { ELIGIBLE: 0, BLOCKED: 0, NOT_APPLICABLE: 0, UNDECIDED: 0 };
   let inScope = 0;
   let outOfScope = 0;
@@ -251,6 +321,7 @@ function summarizeLedger(ledger) {
 
   for (const finding of ledger.findings) {
     classification[finding.classification] = (classification[finding.classification] ?? 0) + 1;
+    confidence[finding.confidence] = (confidence[finding.confidence] ?? 0) + 1;
     execution[finding.execution] = (execution[finding.execution] ?? 0) + 1;
 
     if (finding.scope === 'OUT_OF_SCOPE') {
@@ -270,6 +341,7 @@ function summarizeLedger(ledger) {
     byIssue: countByIssue(ledger.findings),
     scope: { inScope, outOfScope },
     classification,
+    confidence,
     execution,
     reconciliation: {
       classifiedInScope,
@@ -292,6 +364,11 @@ function formatSummary(summary) {
     `  REVIEW: ${summary.classification.REVIEW}`,
     `  CONFIGURATION: ${summary.classification.CONFIGURATION}`,
     `  UNCLASSIFIED: ${summary.classification.UNCLASSIFIED}`,
+    'Confidence:',
+    `  HIGH: ${summary.confidence.HIGH}`,
+    `  MEDIUM: ${summary.confidence.MEDIUM}`,
+    `  LOW: ${summary.confidence.LOW}`,
+    `  UNASSESSED: ${summary.confidence.UNASSESSED}`,
     'Scope:',
     `  IN_SCOPE: ${summary.scope.inScope}`,
     `  OUT_OF_SCOPE: ${summary.scope.outOfScope}`,

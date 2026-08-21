@@ -49,13 +49,33 @@ test('builds a deterministic ledger from Knip JSON', () => {
     'F0005',
   ]);
   assert.ok(ledger.findings.every((finding) => finding.classification === 'UNCLASSIFIED'));
+  assert.ok(ledger.findings.every((finding) => finding.confidence === 'UNASSESSED'));
 });
+
+function completeFinding(finding, overrides = {}) {
+  Object.assign(finding, {
+    classification: 'SAFE',
+    confidence: 'HIGH',
+    execution: 'ELIGIBLE',
+    action: 'delete unused declaration',
+    ...overrides,
+  });
+}
 
 test('verifies a fully accounted ledger', () => {
   const ledger = buildLedgerFromText(report);
   for (const finding of ledger.findings) {
-    finding.classification = finding.issue === 'unlisted' ? 'REVIEW' : 'SAFE';
-    finding.execution = 'NOT_APPLICABLE';
+    completeFinding(finding);
+  }
+  const unlisted = ledger.findings.find((finding) => finding.issue === 'unlisted');
+  completeFinding(unlisted, {
+    classification: 'REVIEW',
+    execution: 'BLOCKED',
+    action: 'correct dependency declaration',
+  });
+  const dependency = ledger.findings.find((finding) => finding.issue === 'dependencies');
+  if (dependency) {
+    dependency.action = 'remove dependency';
   }
 
   const summary = verifyLedgerAgainstText(ledger, report);
@@ -67,9 +87,12 @@ test('verifies a fully accounted ledger', () => {
 
 test('allows out-of-scope findings to remain unclassified', () => {
   const ledger = buildLedgerFromText(report);
-  ledger.findings[0].scope = 'OUT_OF_SCOPE';
+  Object.assign(ledger.findings[0], {
+    scope: 'OUT_OF_SCOPE',
+    execution: 'NOT_APPLICABLE',
+  });
   for (const finding of ledger.findings.slice(1)) {
-    finding.classification = 'SAFE';
+    completeFinding(finding);
   }
 
   const summary = verifyLedgerAgainstText(ledger, report);
@@ -81,13 +104,13 @@ test('fails when an in-scope finding remains unclassified', () => {
   const ledger = buildLedgerFromText(report);
   assert.throws(
     () => verifyLedgerAgainstText(ledger, report),
-    /final verification requires 0/,
+    /in-scope finding is unclassified/,
   );
 });
 
 test('fails when a finding is removed from the ledger', () => {
   const ledger = buildLedgerFromText(report);
-  for (const finding of ledger.findings) finding.classification = 'SAFE';
+  for (const finding of ledger.findings) completeFinding(finding);
   ledger.findings.pop();
 
   assert.throws(
@@ -98,11 +121,130 @@ test('fails when a finding is removed from the ledger', () => {
 
 test('fails when the raw Knip report changes', () => {
   const ledger = buildLedgerFromText(report);
-  for (const finding of ledger.findings) finding.classification = 'SAFE';
+  for (const finding of ledger.findings) completeFinding(finding);
   const changed = JSON.stringify({ issues: [] });
 
   assert.throws(
     () => verifyLedgerAgainstText(ledger, changed),
     /source fingerprint/,
   );
+});
+
+test('fails when confidence remains unassessed', () => {
+  const ledger = buildLedgerFromText(report);
+  for (const finding of ledger.findings) completeFinding(finding);
+  ledger.findings[0].confidence = 'UNASSESSED';
+
+  assert.throws(
+    () => verifyLedgerAgainstText(ledger, report),
+    /unassessed confidence/,
+  );
+});
+
+test('fails when execution remains undecided', () => {
+  const ledger = buildLedgerFromText(report);
+  for (const finding of ledger.findings) completeFinding(finding);
+  ledger.findings[0].execution = 'UNDECIDED';
+
+  assert.throws(
+    () => verifyLedgerAgainstText(ledger, report),
+    /undecided execution/,
+  );
+});
+
+test('fails when a REVIEW finding is eligible', () => {
+  const ledger = buildLedgerFromText(report);
+  for (const finding of ledger.findings) completeFinding(finding);
+  ledger.findings[0].classification = 'REVIEW';
+
+  assert.throws(
+    () => verifyLedgerAgainstText(ledger, report),
+    /only SAFE \/ HIGH findings can be eligible/,
+  );
+});
+
+test('fails when a SAFE MEDIUM finding is eligible', () => {
+  const ledger = buildLedgerFromText(report);
+  for (const finding of ledger.findings) completeFinding(finding);
+  ledger.findings[0].confidence = 'MEDIUM';
+
+  assert.throws(
+    () => verifyLedgerAgainstText(ledger, report),
+    /only SAFE \/ HIGH findings can be eligible/,
+  );
+});
+
+test('fails when an in-scope finding has no action', () => {
+  const ledger = buildLedgerFromText(report);
+  for (const finding of ledger.findings) completeFinding(finding);
+  ledger.findings[0].action = null;
+
+  assert.throws(
+    () => verifyLedgerAgainstText(ledger, report),
+    /must have an exact action/,
+  );
+});
+
+test('fails when an out-of-scope finding is eligible', () => {
+  const ledger = buildLedgerFromText(report);
+  for (const finding of ledger.findings) completeFinding(finding);
+  ledger.findings[0].scope = 'OUT_OF_SCOPE';
+
+  assert.throws(
+    () => verifyLedgerAgainstText(ledger, report),
+    /out-of-scope findings must have no action/,
+  );
+});
+
+test('fails when a CONFIGURATION finding has a deletion action', () => {
+  const ledger = buildLedgerFromText(report);
+  for (const finding of ledger.findings) completeFinding(finding);
+  completeFinding(ledger.findings[0], {
+    classification: 'CONFIGURATION',
+    execution: 'BLOCKED',
+    action: 'delete unused file',
+  });
+
+  assert.throws(
+    () => verifyLedgerAgainstText(ledger, report),
+    /incompatible action/,
+  );
+});
+
+test('fails when an eligible finding has no executable action', () => {
+  const ledger = buildLedgerFromText(report);
+  for (const finding of ledger.findings) completeFinding(finding);
+  ledger.findings[0].action = 'keep and review';
+
+  assert.throws(
+    () => verifyLedgerAgainstText(ledger, report),
+    /must have an executable action/,
+  );
+});
+
+test('accepts a complete analysis-only decision', () => {
+  const ledger = buildLedgerFromText(report);
+  for (const finding of ledger.findings) {
+    completeFinding(finding, {
+      execution: 'NOT_APPLICABLE',
+      action: 'no action in analysis-only mode',
+    });
+  }
+
+  const summary = verifyLedgerAgainstText(ledger, report);
+  assert.equal(summary.execution.NOT_APPLICABLE, 5);
+});
+
+test('accepts an analysis-only CONFIGURATION finding', () => {
+  const ledger = buildLedgerFromText(report);
+  for (const finding of ledger.findings) {
+    completeFinding(finding, {
+      execution: 'NOT_APPLICABLE',
+      action: 'no action in analysis-only mode',
+    });
+  }
+  ledger.findings[0].classification = 'CONFIGURATION';
+
+  const summary = verifyLedgerAgainstText(ledger, report);
+  assert.equal(summary.classification.CONFIGURATION, 1);
 });

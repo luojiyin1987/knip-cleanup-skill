@@ -65,6 +65,7 @@ The model or reviewer fills separate dimensions rather than collapsing them into
 
 ```text
 classification: UNCLASSIFIED | SAFE | REVIEW | CONFIGURATION
+confidence:     UNASSESSED | HIGH | MEDIUM | LOW
 scope:          IN_SCOPE | OUT_OF_SCOPE
 execution:      UNDECIDED | ELIGIBLE | BLOCKED | NOT_APPLICABLE
 ```
@@ -75,7 +76,7 @@ Then verify against the original Knip output:
 node <skill-dir>/scripts/finding-ledger.mjs verify /tmp/knip.json /tmp/knip-ledger.json
 ```
 
-Verification fails if findings are missing, duplicated, altered, based on a different source report, or if any in-scope finding remains unclassified. Out-of-scope findings are still accounted for but do not need a cleanup classification.
+Verification fails if findings are missing, duplicated, altered, or based on a different source report. Each in-scope finding needs a classification, confidence, execution decision, and exact action. Only `SAFE / HIGH` findings can use `ELIGIBLE`. Out-of-scope findings remain accounted for and must have no action.
 
 The ledger is deliberately **not** another analyzer. It does not infer dead code, inspect AST consumers, or decide risk. Knip and repository/CLI evidence remain responsible for facts; the model remains responsible for judgment.
 

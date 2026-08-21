@@ -75,4 +75,7 @@ Use precise action names:
 - remove export modifier;
 - delete unused declaration;
 - correct Knip model;
+- declare dependency;
+- correct dependency declaration;
+- correct unresolved reference;
 - keep and review.

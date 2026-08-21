@@ -1,6 +1,6 @@
 ---
 name: knip-cleanup
-description: Safely investigate and clean up unused JavaScript and TypeScript code with Knip. Prefer repository and CLI evidence over heuristic rules, classify findings before changing code, keep cleanup scoped, validate each batch, and rerun Knip.
+description: Safely investigate and clean up unused JavaScript and TypeScript files, exports, types, and dependencies with Knip. Use for dead-code cleanup, Knip report review, unused dependency cleanup, and scoped monorepo cleanup. Classify findings before changes, validate each batch, and rerun Knip.
 ---
 
 # Knip Cleanup
@@ -90,17 +90,20 @@ The ledger script does **not** decide whether code is dead. It only:
 - preserves issue type, file, symbol/name, namespace, and source position when Knip reports them;
 - records raw totals and per-issue counts;
 - fingerprints the source Knip JSON;
-- provides separate fields for classification, scope, execution state, exact action, unknowns, and notes.
+- provides separate fields for classification, confidence, scope, execution state, exact action, unknowns, and notes.
 
 Keep these dimensions separate:
 
 ```text
 classification: UNCLASSIFIED | SAFE | REVIEW | CONFIGURATION
+confidence:     UNASSESSED | HIGH | MEDIUM | LOW
 scope:          IN_SCOPE | OUT_OF_SCOPE
 execution:      UNDECIDED | ELIGIBLE | BLOCKED | NOT_APPLICABLE
 ```
 
-An `OUT_OF_SCOPE` finding may remain unclassified. Every `IN_SCOPE` finding must end as `SAFE`, `REVIEW`, or `CONFIGURATION`.
+An `OUT_OF_SCOPE` finding may remain unclassified. It must use `NOT_APPLICABLE` and have no action.
+
+Every `IN_SCOPE` finding must have a classification, confidence, execution decision, and exact action. Only `SAFE / HIGH` can use `ELIGIBLE`. `REVIEW` and `CONFIGURATION` findings must not be eligible for automatic cleanup.
 
 After classification, verify the ledger against the original Knip JSON:
 
@@ -108,7 +111,7 @@ After classification, verify the ledger against the original Knip JSON:
 node <skill-dir>/scripts/finding-ledger.mjs verify /tmp/knip.json /tmp/knip-ledger.json
 ```
 
-Final verification must pass before claiming a complete multi-finding analysis. Verification fails when the source report changed, a finding is missing/duplicated/tampered with, status values are invalid, counts do not reconcile, or any in-scope finding remains unclassified.
+Final verification must pass before claiming a complete multi-finding analysis. Verification fails when the source report changed or a finding is missing, duplicated, or changed. It also fails when final states are incomplete or conflict with the execution gate.
 
 For a narrowly scoped question about one or a few already-identified findings, a ledger is optional when completeness is not in doubt.
 
@@ -160,6 +163,9 @@ Prefer precise actions:
 - remove export modifier;
 - delete unused declaration;
 - correct Knip model;
+- declare dependency;
+- correct dependency declaration;
+- correct unresolved reference;
 - keep and review;
 - no action in analysis-only mode.
 
