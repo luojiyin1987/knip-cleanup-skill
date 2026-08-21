@@ -30,7 +30,9 @@ For pull requests and feature branches, the skill can also correlate Knip findin
 - **PRE-EXISTING** — a trusted baseline shows the finding already existed;
 - **UNCERTAIN** — available Git evidence is not enough to attribute it safely.
 
-See [SKILL.md](SKILL.md) for the workflow, [references/risk-classification.md](references/risk-classification.md) for cleanup risk, and [references/git-aware-review.md](references/git-aware-review.md) for PR-scoped review.
+For monorepos, the skill treats workspace ownership and package boundaries as part of cleanup evidence. A workspace-filtered result is useful for focus, but it is not treated as proof that root tooling, dependent packages, or external package consumers are irrelevant.
+
+See [SKILL.md](SKILL.md) for the workflow, [references/risk-classification.md](references/risk-classification.md) for cleanup risk, [references/git-aware-review.md](references/git-aware-review.md) for PR-scoped review, and [references/monorepo-cleanup.md](references/monorepo-cleanup.md) for workspace-specific guidance.
 
 ## Principles
 
@@ -43,6 +45,7 @@ See [SKILL.md](SKILL.md) for the workflow, [references/risk-classification.md](r
 - Rerun Knip after cleanup because removing dead code can expose more dead code.
 - In PR review, use Git context to prioritize findings without hiding unrelated analysis results.
 - Do not attribute a finding to a PR solely because its file changed.
+- In monorepos, check workspace ownership, public package metadata, and relevant cross-workspace consumers before cleanup.
 
 ## Knip integration
 
@@ -54,13 +57,13 @@ pnpm exec knip
 
 The skill can also work with Knip's official MCP server when the agent environment exposes `knip-run`.
 
-For monorepos, Knip's `--workspace` filter may be used to focus a first pass on affected workspaces when appropriate.
+For monorepos, Knip's `--workspace` filter may be used to focus a first pass on affected workspaces when appropriate. Broader validation and a full Knip run may still be needed before finalizing cross-workspace changes.
 
 This repository does not wrap or replace Knip and does not require its own runtime dependency.
 
 ## Project status
 
-The skill currently covers repository cleanup and Git-aware PR/branch review. Confidence scoring refinements, deeper monorepo behavior, and automation can be added separately without turning the project into a CLI or another MCP server.
+The skill currently covers repository cleanup, Git-aware PR/branch review, and monorepo/workspace-aware cleanup. Confidence scoring refinements and automation can be added separately without turning the project into a CLI or another MCP server.
 
 ## License
 
